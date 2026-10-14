@@ -51,26 +51,44 @@ public struct WispConfig: Codable, Equatable, Sendable {
         remoteControl = try container.decode(.remoteControl, default: defaults.remoteControl)
     }
 
-    /// Reads the config, writing the defaults on first run so every setting is discoverable.
-    /// A file that does not parse falls back to the defaults and returns a message to show.
+    public enum ReadResult: Equatable, Sendable {
+        case loaded(WispConfig)
+        case missing
+        /// The file exists but does not parse; the message says where.
+        case invalid(String)
+    }
+
+    /// Reads the config without side effects.
+    public static func read(from url: URL) -> ReadResult {
+        guard let data = try? Data(contentsOf: url) else { return .missing }
+        do {
+            return .loaded(try JSONDecoder().decode(WispConfig.self, from: data))
+        } catch {
+            return .invalid("\(url.lastPathComponent) has an error (\(describe(error))), so Wisp is using the defaults.")
+        }
+    }
+
+    /// Reads the config at launch, writing the defaults on first run so every setting is discoverable.
     public static func load(from url: URL) -> (config: WispConfig, problem: String?) {
-        guard let data = try? Data(contentsOf: url) else {
+        switch read(from: url) {
+        case .loaded(let config):
+            return (config, nil)
+        case .invalid(let problem):
+            return (WispConfig(), problem)
+        case .missing:
             let config = WispConfig()
             try? config.save(to: url)
             return (config, nil)
         }
-        do {
-            return (try JSONDecoder().decode(WispConfig.self, from: data), nil)
-        } catch {
-            return (WispConfig(), "\(url.lastPathComponent) has an error (\(describe(error))), so Wisp is using the defaults.")
-        }
     }
 
+    /// Writes atomically, through a symlinked config to its target.
     public func save(to url: URL) throws {
+        let target = url.resolvingSymlinksInPath()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try encoder.encode(self).write(to: url, options: .atomic)
+        try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoder.encode(self).write(to: target, options: .atomic)
     }
 
     private static func describe(_ error: Error) -> String {

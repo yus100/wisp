@@ -6,7 +6,8 @@ public struct TimedOut: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? { "Timed out waiting for \(what)." }
 }
 
-/// Runs `operation`, failing with `TimedOut` if it takes longer than `limit`. Cancels the operation on timeout.
+/// Runs `operation`, failing with `TimedOut` if it takes longer than `limit`. The operation is cancelled on
+/// timeout and must respond to cancellation, since the group waits for it before returning.
 public func withDeadline<T: Sendable>(
     _ limit: Duration, _ what: String, operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {

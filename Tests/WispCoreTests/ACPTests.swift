@@ -73,6 +73,20 @@ private final class Outbox: @unchecked Sendable {
         }
     }
 
+    @Test func cancellingTheCallerAbandonsTheRequest() async throws {
+        let outbox = Outbox()
+        let connection = ACPConnection { outbox.send($0) }
+        let start = ContinuousClock.now
+        await #expect(throws: TimedOut.self) {
+            try await withDeadline(.milliseconds(200), "a reply") {
+                try await connection.request("initialize", params: SessionParams(sessionId: "s"), as: EmptyResult.self)
+            }
+        }
+        #expect(ContinuousClock.now - start < .seconds(2))
+        // A reply that arrives after the caller gave up is ignored.
+        #expect(await connection.receive(Data(#"{"jsonrpc":"2.0","id":1,"result":{}}"#.utf8)) == nil)
+    }
+
     @Test func closeFailsPendingAndLaterRequests() async throws {
         let outbox = Outbox()
         let connection = ACPConnection { outbox.send($0) }

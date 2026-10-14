@@ -94,13 +94,13 @@ public struct Conversation: Equatable, Sendable {
     }
 
     /// Ends the running turn with the agent's reply to `session/prompt`.
+    /// A turn that already failed (for example, retries ran out) keeps its error but still records the model.
     public mutating func finish(stopReason: String?, model: String?) {
-        updateLast { turn in
-            turn.notice = nil
-            turn.model = model
-            if case .failed = turn.state { return }
-            turn.state = stopReason == "cancelled" ? .cancelled : .finished
-        }
+        guard let index = turns.indices.last else { return }
+        turns[index].notice = nil
+        turns[index].model = model
+        guard turns[index].isRunning else { return }
+        turns[index].state = stopReason == "cancelled" ? .cancelled : .finished
     }
 
     public mutating func fail(_ message: String) {

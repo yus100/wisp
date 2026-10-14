@@ -55,8 +55,9 @@ import Testing
         var conversation = Conversation(paths: paths)
         conversation.begin("q")
         conversation.apply(.retry(.failed(message: "Token expired.", isAuthError: true)))
-        conversation.finish(stopReason: "end_turn", model: nil)
+        conversation.finish(stopReason: "end_turn", model: "grok-4.7")
         #expect(conversation.turns[0].state == .failed("Token expired. Run `grok login` in a terminal, then try again."))
+        #expect(conversation.turns[0].model == "grok-4.7")
     }
 
     @Test func cancelledTurnsAndLateUpdates() {

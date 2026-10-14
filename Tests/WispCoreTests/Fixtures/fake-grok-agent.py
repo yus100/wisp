@@ -4,10 +4,13 @@
 Prompt text selects a scenario:
   "hello"   streams two chunks and a tool call, then ends the turn
   "permit"  asks the client for permission first and echoes the chosen option
+  "permit-always-only"  offers only an always-allow option, which the client must decline
   "fs"      sends a request the client does not support and echoes the error code
   "crash"   exits with status 3 mid-turn
+FAKE_AGENT_HANG=1 makes it never answer `initialize`.
 """
 import json
+import os
 import sys
 
 
@@ -41,6 +44,8 @@ model = "grok-test"
 for line in sys.stdin:
     message = json.loads(line)
     method, params, request_id = message.get("method"), message.get("params", {}), message.get("id")
+    if method == "initialize" and os.environ.get("FAKE_AGENT_HANG"):
+        continue
     if method == "initialize":
         send({"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": 1, "_meta": {"modelState": {
             "currentModelId": "grok-test",
@@ -61,7 +66,11 @@ for line in sys.stdin:
         text = params["prompt"][0]["text"]
         if text == "crash":
             sys.exit(3)
-        if text == "permit":
+        if text == "permit-always-only":
+            send({"jsonrpc": "2.0", "id": "perm-2", "method": "session/request_permission", "params": {
+                "sessionId": session_id, "options": [{"optionId": "always", "kind": "allow_always"}]}})
+            chunk(session_id, "outcome:" + read_reply()["result"]["outcome"]["outcome"])
+        elif text == "permit":
             send({"jsonrpc": "2.0", "id": "perm-1", "method": "session/request_permission", "params": {
                 "sessionId": session_id, "options": [
                     {"optionId": "reject", "kind": "reject_once"},

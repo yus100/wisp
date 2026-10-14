@@ -32,14 +32,20 @@ public actor ACPConnection {
         let id = nextID
         nextID += 1
         let message = try encoder.encode(OutgoingRequest(id: id, method: method, params: params))
-        let reply = try await withCheckedThrowingContinuation { continuation in
-            pending[id] = continuation
-            do {
-                try send(message + Data([0x0A]))
-            } catch {
-                pending.removeValue(forKey: id)
-                continuation.resume(throwing: error)
+        // Cancelling the calling task abandons the request, so deadlines (`withDeadline`) can fire.
+        let reply = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                guard !Task.isCancelled else { return continuation.resume(throwing: CancellationError()) }
+                pending[id] = continuation
+                do {
+                    try send(message + Data([0x0A]))
+                } catch {
+                    pending.removeValue(forKey: id)
+                    continuation.resume(throwing: error)
+                }
             }
+        } onCancel: {
+            Task { await self.abandon(id) }
         }
         if let error = try decoder.decode(IncomingError.self, from: reply).error {
             let detail = error.data.map { ": \($0)" } ?? ""
@@ -89,6 +95,11 @@ public actor ACPConnection {
         default:
             return nil
         }
+    }
+
+    /// Fails a cancelled request; a late reply for it is then ignored.
+    private func abandon(_ id: Int) {
+        pending.removeValue(forKey: id)?.resume(throwing: CancellationError())
     }
 
     /// Fails every outstanding request. Later calls throw `error`.

@@ -35,9 +35,12 @@ public struct WispPaths: Equatable, Sendable {
         return home.path(percentEncoded: false).trimmingSuffix("/") + path.dropFirst()
     }
 
-    /// Replaces this home directory with `~` for display.
+    /// Replaces this home directory with `~` for display, only where it is a whole path
+    /// (so `/Users/al` does not match inside `/Users/alice`).
     public func abbreviate(_ text: String) -> String {
-        text.replacingOccurrences(of: home.path(percentEncoded: false).trimmingSuffix("/"), with: "~")
+        let home = NSRegularExpression.escapedPattern(for: home.path(percentEncoded: false).trimmingSuffix("/"))
+        guard let pattern = try? NSRegularExpression(pattern: home + "(?![A-Za-z0-9._-])") else { return text }
+        return pattern.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "~")
     }
 
     private func created(_ url: URL) -> URL {

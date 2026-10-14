@@ -11,7 +11,9 @@ import Testing
         var exits: [Int32] = []
     }
 
-    func startAgent() async throws -> (GrokAgent, Recorder) {
+    func startAgent(
+        environment extra: [String: String] = [:], startTimeout: Duration = .seconds(30)
+    ) async throws -> (GrokAgent, Recorder) {
         let source = try #require(
             Bundle.module.url(forResource: "fake-grok-agent", withExtension: "py", subdirectory: "Fixtures"))
         let executable = FileManager.default.temporaryDirectory.appending(path: "fake-grok-\(UUID().uuidString).py")
@@ -21,9 +23,10 @@ import Testing
         let agent = GrokAgent(
             launch: .init(
                 executable: executable,
-                environment: ProcessInfo.processInfo.environment,
+                environment: ProcessInfo.processInfo.environment.merging(extra) { $1 },
                 workingDirectory: FileManager.default.temporaryDirectory,
-                clientVersion: "test"))
+                clientVersion: "test",
+                startTimeout: startTimeout))
         let recorder = Recorder()
         agent.onSessionUpdate = { recorder.updates.append($0.update) }
         agent.onUnexpectedExit = { recorder.exits.append($0) }
@@ -64,8 +67,12 @@ import Testing
         defer { agent.stop() }
         let session = try await agent.newSession(in: "/tmp", rules: "")
         _ = try await agent.prompt("permit", in: session.sessionId)
+        _ = try await agent.prompt("permit-always-only", in: session.sessionId)
         _ = try await agent.prompt("fs", in: session.sessionId)
-        #expect(recorder.updates == [.messageChunk("approved:once"), .messageChunk("error:-32601")])
+        #expect(
+            recorder.updates == [
+                .messageChunk("approved:once"), .messageChunk("outcome:cancelled"), .messageChunk("error:-32601"),
+            ])
     }
 
     @Test func switchingModelsLearnsTheirEffortLevels() async throws {
@@ -95,6 +102,14 @@ import Testing
         #expect(recorder.exits == [3])
         #expect(!agent.isRunning)
         await #expect(throws: ACPError.disconnected) { try await agent.prompt("hello", in: session.sessionId) }
+    }
+
+    @Test func aHungHandshakeTimesOutAndStopsTheProcess() async throws {
+        let start = ContinuousClock.now
+        await #expect(throws: TimedOut(what: "grok to start")) {
+            _ = try await startAgent(environment: ["FAKE_AGENT_HANG": "1"], startTimeout: .milliseconds(300))
+        }
+        #expect(ContinuousClock.now - start < .seconds(3))
     }
 
     @Test func stopIsNotReportedAsACrash() async throws {

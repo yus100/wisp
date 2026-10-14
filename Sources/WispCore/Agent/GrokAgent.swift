@@ -12,12 +12,18 @@ public final class GrokAgent {
         public var environment: [String: String]
         public var workingDirectory: URL
         public var clientVersion: String
+        /// How long the ACP handshake may take before the process is killed.
+        public var startTimeout: Duration
 
-        public init(executable: URL, environment: [String: String], workingDirectory: URL, clientVersion: String) {
+        public init(
+            executable: URL, environment: [String: String], workingDirectory: URL, clientVersion: String,
+            startTimeout: Duration = .seconds(30)
+        ) {
             self.executable = executable
             self.environment = environment
             self.workingDirectory = workingDirectory
             self.clientVersion = clientVersion
+            self.startTimeout = startTimeout
         }
     }
 
@@ -90,7 +96,7 @@ public final class GrokAgent {
 
         do {
             let clientVersion = launch.clientVersion
-            let result = try await withDeadline(.seconds(30), "grok to start") {
+            let result = try await withDeadline(launch.startTimeout, "grok to start") {
                 try await connection.request(
                     "initialize",
                     params: InitializeParams(clientInfo: .init(name: "wisp", version: clientVersion)),
@@ -181,7 +187,7 @@ public final class GrokAgent {
             // Sessions run with always-approve, so this should not happen. Approving once keeps the turn from
             // hanging without saving an "always allow" rule into the user's own grok settings.
             let options = (try? decoder.decode(IncomingParams<PermissionRequest>.self, from: data).params.options) ?? []
-            let choice = options.first { $0.kind == "allow_once" } ?? options.first { $0.kind?.hasPrefix("allow") == true }
+            let choice = options.first { $0.kind == "allow_once" }
             let outcome =
                 choice.map { PermissionResponse.Outcome(outcome: "selected", optionId: $0.optionId) }
                 ?? PermissionResponse.Outcome(outcome: "cancelled", optionId: nil)

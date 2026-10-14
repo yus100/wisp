@@ -37,6 +37,32 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
 
+    @Test func readHasNoSideEffects() throws {
+        #expect(WispConfig.read(from: file) == .missing)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("{ not json".utf8).write(to: file)
+        guard case .invalid(let message) = WispConfig.read(from: file) else {
+            Issue.record("expected .invalid")
+            return
+        }
+        #expect(message.contains("invalid JSON"))
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    @Test func saveWritesThroughSymlinks() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let target = directory.appending(path: "real.json")
+        try WispConfig().save(to: target)
+        try FileManager.default.createSymbolicLink(at: file, withDestinationURL: target)
+        var config = WispConfig()
+        config.model = "linked"
+        try config.save(to: file)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: file.path) == target.path)
+        #expect(WispConfig.load(from: target).config.model == "linked")
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     @Test func saveRoundTrips() throws {
         var config = WispConfig()
         config.model = "claude-opus-5-5"
@@ -55,6 +81,7 @@ import Testing
         #expect(paths.expand("~/Documents") == "/Users/someone/Documents")
         #expect(paths.expand("/tmp") == "/tmp")
         #expect(paths.abbreviate("ls /Users/someone/Documents") == "ls ~/Documents")
+        #expect(paths.abbreviate("cd /Users/someone && ls /Users/someoneelse") == "cd ~ && ls /Users/someoneelse")
     }
 
     @Test func grokHomeHonorsEnvironment() {

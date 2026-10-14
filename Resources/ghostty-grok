@@ -1,0 +1,67 @@
+#!/bin/bash
+# Open a Grok Build session in a new Ghostty window (or tab).
+#
+#   ghostty-grok [--cwd DIR] [--prompt TEXT | --prompt-file FILE] [--resume SESSION_ID] [--tab]
+#
+# The command is typed into your normal login shell, so when grok exits you are
+# left in a shell in DIR. The prompt travels in an environment variable, so any
+# quoting or newlines survive intact.
+set -euo pipefail
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+
+cwd="$HOME"
+prompt=""
+resume=""
+target="${GROK_SPOTLIGHT_GHOSTTY_TARGET:-window}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --cwd) cwd="$2"; shift 2 ;;
+    --prompt) prompt="$2"; shift 2 ;;
+    --prompt-file) prompt="$(cat "$2")"; shift 2 ;;
+    --resume) resume="$2"; shift 2 ;;
+    --tab) target="tab"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ghostty-grok: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+cwd="${cwd/#\~/$HOME}"
+if [ ! -d "$cwd" ]; then
+  echo "ghostty-grok: no such directory: $cwd" >&2
+  exit 1
+fi
+cwd="$(cd "$cwd" && pwd)"
+
+cmd="grok"
+if [ -n "$resume" ]; then
+  cmd="$cmd --resume $(printf '%q' "$resume")"
+fi
+env_entries=()
+if [ -n "$prompt" ]; then
+  env_entries+=("GROK_SPOTLIGHT_PROMPT=$prompt")
+  cmd="$cmd \"\$GROK_SPOTLIGHT_PROMPT\""
+fi
+
+/usr/bin/osascript - "$cwd" "$cmd"$'\n' "$target" ${env_entries[@]+"${env_entries[@]}"} >/dev/null <<'APPLESCRIPT'
+on run argv
+	set theDir to item 1 of argv
+	set theInput to item 2 of argv
+	set theTarget to item 3 of argv
+	tell application "Ghostty"
+		set cfg to new surface configuration
+		set initial working directory of cfg to theDir
+		set initial input of cfg to theInput
+		if (count of argv) > 3 then set environment variables of cfg to items 4 thru -1 of argv
+		if theTarget is "tab" and (count of windows) > 0 then
+			new tab in front window with configuration cfg
+		else
+			new window with configuration cfg
+		end if
+		activate
+	end tell
+	return "opened"
+end run
+APPLESCRIPT
+echo "Opened Grok Build in Ghostty at $cwd"

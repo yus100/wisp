@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.yus100.grokspotlight</string>
+	<key>CFBundleName</key>
+	<string>GrokSpotlight</string>
+	<key>CFBundleDisplayName</key>
+	<string>Grok Spotlight</string>
+	<key>CFBundleExecutable</key>
+	<string>GrokSpotlight</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Grok Spotlight listens while you hold the hotkey or use voice mode, and streams the audio to xAI speech-to-text.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Grok Spotlight opens Grok Build sessions in new Ghostty windows.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Grok answers questions about your files.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Grok answers questions about your files.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Grok answers questions about your files.</string>
+</dict>
+</plist>

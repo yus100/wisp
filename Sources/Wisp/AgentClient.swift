@@ -10,7 +10,7 @@ enum AgentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notRunning: return "Grok agent is not running."
-        case .exited(let code): return "Grok agent exited (code \(code)). See ~/Library/Logs/GrokSpotlight/agent.log."
+        case .exited(let code): return "Grok agent exited (code \(code)). See ~/Library/Logs/Wisp/agent.log."
         case .rpc(let message): return message
         }
     }
@@ -25,7 +25,7 @@ final class AgentClient {
     private let lock = NSLock()
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSON, Error>] = [:]
-    private let writeQueue = DispatchQueue(label: "grok-spotlight.agent.write")
+    private let writeQueue = DispatchQueue(label: "wisp.agent.write")
 
     /// Agent notifications (`session/update` and the `_x.ai/*` extensions), delivered on the main queue.
     var onNotification: ((String, JSON) -> Void)?
@@ -175,6 +175,6 @@ final class AgentClient {
             return
         }
         appLog("agent request not supported: \(method)")
-        send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Grok Spotlight does not support \(method)"]])
+        send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Wisp does not support \(method)"]])
     }
 }

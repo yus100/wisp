@@ -3,8 +3,8 @@
 # synthesized WAV, and a new conversation. Costs a couple of model calls.
 set -euo pipefail
 
-CTL="${GROK_SPOTLIGHT_APP:-$HOME/Applications/GrokSpotlight.app}/Contents/MacOS/GrokSpotlight"
-OUT="${TMPDIR:-/tmp}/grok-spotlight-smoke"
+CTL="${WISP_APP:-$HOME/Applications/Wisp.app}/Contents/MacOS/Wisp"
+OUT="${TMPDIR:-/tmp}/wisp-smoke"
 mkdir -p "$OUT"
 pass() { printf '  ok  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; exit 1; }
@@ -20,7 +20,7 @@ wait_idle() {
   fail "timed out waiting for an answer"
 }
 
-pgrep -x GrokSpotlight >/dev/null || fail "Grok Spotlight is not running (make install)"
+pgrep -x Wisp >/dev/null || fail "Wisp is not running (make install)"
 
 "$CTL" ctl show; sleep 0.3
 press cmd+n; sleep 0.3

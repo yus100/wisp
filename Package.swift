@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "GrokSpotlight",
+    name: "Wisp",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "GrokSpotlight",
-            path: "Sources/GrokSpotlight",
+            name: "Wisp",
+            path: "Sources/Wisp",
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AVFoundation"),

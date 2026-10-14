@@ -5,7 +5,7 @@ import Foundation
 enum Ghostty {
     static var scriptPath: String {
         Bundle.main.resourceURL?.appendingPathComponent("ghostty-grok").path
-            ?? "/Applications/GrokSpotlight.app/Contents/Resources/ghostty-grok"
+            ?? "/Applications/Wisp.app/Contents/Resources/ghostty-grok"
     }
 
     static func open(cwd: String, resume: String? = nil, prompt: String? = nil, target: String, env: [String: String],

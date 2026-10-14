@@ -13,7 +13,7 @@ usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
 cwd="$HOME"
 prompt=""
 resume=""
-target="${GROK_SPOTLIGHT_GHOSTTY_TARGET:-window}"
+target="${WISP_GHOSTTY_TARGET:-window}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -40,8 +40,8 @@ if [ -n "$resume" ]; then
 fi
 env_entries=()
 if [ -n "$prompt" ]; then
-  env_entries+=("GROK_SPOTLIGHT_PROMPT=$prompt")
-  cmd="$cmd \"\$GROK_SPOTLIGHT_PROMPT\""
+  env_entries+=("WISP_PROMPT=$prompt")
+  cmd="$cmd \"\$WISP_PROMPT\""
 fi
 
 /usr/bin/osascript - "$cwd" "$cmd"$'\n' "$target" ${env_entries[@]+"${env_entries[@]}"} >/dev/null <<'APPLESCRIPT'

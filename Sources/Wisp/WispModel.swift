@@ -3,7 +3,7 @@ import Foundation
 
 /// State for the panel: one quick-answer conversation backed by a Grok Build session, plus voice input.
 @MainActor
-final class SpotlightModel: ObservableObject {
+final class WispModel: ObservableObject {
     struct ToolActivity: Identifiable {
         let id: String
         var title: String
@@ -98,7 +98,7 @@ final class SpotlightModel: ObservableObject {
     private var rules: String {
         let script = Ghostty.scriptPath
         var text = """
-        You are Grok Spotlight: the user opened you with a global hotkey from a Spotlight-style launcher on their Mac, \
+        You are Wisp: the user opened you with a global hotkey from a Spotlight-style launcher on their Mac, \
         usually for a quick everyday question. Input may be a voice transcript, so read past speech-recognition errors.
 
         How to answer:
@@ -160,7 +160,7 @@ final class SpotlightModel: ObservableObject {
             _ = try await client.request("initialize", [
                 "protocolVersion": 1,
                 "clientCapabilities": ["fs": ["readTextFile": false, "writeTextFile": false], "terminal": false],
-                "clientInfo": ["name": "grok-spotlight", "version": "0.1.0"],
+                "clientInfo": ["name": "wisp", "version": "0.1.0"],
             ])
             appLog("agent started")
             return client
@@ -457,7 +457,7 @@ final class SpotlightModel: ObservableObject {
                     notice = "Allow microphone access in the macOS prompt to use voice."
                 }
                 guard await VoiceSession.requestMicrophoneAccess() else {
-                    failVoice("Microphone access is off. Turn on Grok Spotlight in System Settings › Privacy & Security › Microphone.")
+                    failVoice("Microphone access is off. Turn on Wisp in System Settings › Privacy & Security › Microphone.")
                     return
                 }
                 // The key may have been released while the permission prompt was up.

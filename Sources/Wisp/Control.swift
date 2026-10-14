@@ -1,13 +1,13 @@
 import AppKit
 import Foundation
 
-/// `GrokSpotlight ctl <command>` drives the running app from a shell (other launchers, scripts, smoke tests).
+/// `Wisp ctl <command>` drives the running app from a shell (other launchers, scripts, smoke tests).
 /// Commands travel as distributed notifications, which only processes in your login session can post.
 enum ControlCommand {
-    static let notification = Notification.Name("com.yus100.grokspotlight.ctl")
+    static let notification = Notification.Name("com.yus100.wisp.ctl")
 
     static let usage = """
-    usage: GrokSpotlight ctl <command> [argument]
+    usage: Wisp ctl <command> [argument]
 
       toggle | show | hide      show or hide the panel
       voice                     start hands-free voice, or stop and send
@@ -41,7 +41,7 @@ enum ControlCommand {
             if FileManager.default.fileExists(atPath: argument) { return 0 }
             Thread.sleep(forTimeInterval: 0.05)
         }
-        FileHandle.standardError.write(Data("timed out waiting for \(argument); is Grok Spotlight running?\n".utf8))
+        FileHandle.standardError.write(Data("timed out waiting for \(argument); is Wisp running?\n".utf8))
         return 1
     }
 }
@@ -115,7 +115,7 @@ final class ControlServer {
         panel.simulateKey(keyCode: code, characters: characters, modifiers: modifiers)
     }
 
-    private func writeState(_ model: SpotlightModel, panel: PanelController, to path: String) {
+    private func writeState(_ model: WispModel, panel: PanelController, to path: String) {
         let turns: [JSON] = model.turns.map { turn in
             [
                 "query": turn.query,

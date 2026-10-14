@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.yus100.grokspotlight</string>
+	<string>com.yus100.wisp</string>
 	<key>CFBundleName</key>
-	<string>GrokSpotlight</string>
+	<string>Wisp</string>
 	<key>CFBundleDisplayName</key>
-	<string>Grok Spotlight</string>
+	<string>Wisp</string>
 	<key>CFBundleExecutable</key>
-	<string>GrokSpotlight</string>
+	<string>Wisp</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -23,9 +23,9 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Grok Spotlight listens while you hold the hotkey or use voice mode, and streams the audio to xAI speech-to-text.</string>
+	<string>Wisp listens while you hold the hotkey or use voice mode, and streams the audio to xAI speech-to-text.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Grok Spotlight opens Grok Build sessions in new Ghostty windows.</string>
+	<string>Wisp opens Grok Build sessions in new Ghostty windows.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Grok answers questions about your files.</string>
 	<key>NSDesktopFolderUsageDescription</key>

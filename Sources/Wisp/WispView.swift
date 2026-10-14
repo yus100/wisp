@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct SpotlightView: View {
-    @ObservedObject var model: SpotlightModel
+struct WispView: View {
+    @ObservedObject var model: WispModel
     let width: CGFloat
     let maxConversationHeight: CGFloat
     var onHeightChange: (CGFloat) -> Void
@@ -148,7 +148,7 @@ struct SpotlightView: View {
 }
 
 private struct TurnView: View {
-    let turn: SpotlightModel.Turn
+    let turn: WispModel.Turn
     @State private var showSteps = false
 
     var body: some View {
@@ -206,7 +206,7 @@ private struct TurnView: View {
 }
 
 private struct ToolRow: View {
-    let tool: SpotlightModel.ToolActivity
+    let tool: WispModel.ToolActivity
 
     var body: some View {
         HStack(spacing: 6) {

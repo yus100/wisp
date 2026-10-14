@@ -1,5 +1,5 @@
-APP_NAME := GrokSpotlight
-BUNDLE_ID := com.yus100.grokspotlight
+APP_NAME := Wisp
+BUNDLE_ID := com.yus100.wisp
 BUILD_DIR := .build/release
 APP := build/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications

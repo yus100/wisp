@@ -1,4 +1,4 @@
-# Grok Spotlight
+# Wisp
 
 A Spotlight-style launcher for Grok on macOS. Press a hotkey, type or say a question, and get a short answer from a real Grok Build agent that has full access to your files and shell. When a question turns into real work, one keystroke moves the conversation into a full Grok Build session in Ghostty, or you can ask it to start a fresh dev session in the right project.
 
@@ -9,7 +9,7 @@ No chat app to open, no session to pick, no terminal to set up first.
 Requirements: macOS 14 or later, Xcode Command Line Tools, the [Grok Build CLI](https://x.ai/cli) signed in (`grok login`), and Ghostty 1.3 or later for the hand-off.
 
 ```sh
-make install   # builds GrokSpotlight.app, copies it to ~/Applications, and launches it
+make install   # builds Wisp.app, copies it to ~/Applications, and launches it
 ```
 
 A sparkle icon appears in the menu bar. Turn on **Launch at Login** from that menu.
@@ -49,7 +49,7 @@ Voice uses the same streaming speech-to-text endpoint as Grok Build (`wss://api.
 
 ## Config
 
-`~/.config/grok-spotlight/config.json` is created on first launch. Edits apply the next time the panel opens.
+`~/.config/wisp/config.json` is created on first launch. Edits apply the next time the panel opens.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ Hotkeys accept `cmd`, `option`, `ctrl`, `shift` plus a key such as `space`, `k`,
 Quick-answer sessions run with always-approve in your home directory, so the agent can read, write, and run anything you can. macOS still asks once per protected area:
 
 - **Microphone** on first voice use.
-- **Documents, Desktop, Downloads** (and other apps' data) the first time the agent touches them. To skip these prompts, add GrokSpotlight to System Settings › Privacy & Security › Full Disk Access.
+- **Documents, Desktop, Downloads** (and other apps' data) the first time the agent touches them. To skip these prompts, add Wisp to System Settings › Privacy & Security › Full Disk Access.
 - **Automation › Ghostty** the first time a session opens in Ghostty.
 
 The build signs the app ad hoc with a designated requirement on its bundle ID, so these grants survive rebuilds.
@@ -90,11 +90,11 @@ The build signs the app ad hoc with a designated requirement on its bundle ID, s
 The app binary doubles as a remote control for the running instance:
 
 ```sh
-APP=~/Applications/GrokSpotlight.app/Contents/MacOS/GrokSpotlight
+APP=~/Applications/Wisp.app/Contents/MacOS/Wisp
 $APP ctl toggle                 # or show, hide, voice, new, ghostty
 $APP ctl ask "what's on my calendar today?"
 $APP ctl state /tmp/state.json  # panel state as JSON
 $APP ctl snapshot /tmp/p.png    # render the panel
 ```
 
-`scripts/smoke-test.sh` drives typing, an answer, voice from a synthesized WAV, and the panel keys against the installed app. Logs are in `~/Library/Logs/GrokSpotlight/` (`app.log`, plus the agent's stderr in `agent.log`).
+`scripts/smoke-test.sh` drives typing, an answer, voice from a synthesized WAV, and the panel keys against the installed app. Logs are in `~/Library/Logs/Wisp/` (`app.log`, plus the agent's stderr in `agent.log`).

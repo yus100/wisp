@@ -5,7 +5,7 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var config = AppConfig()
     private var configDate: Date?
-    private var model: SpotlightModel!
+    private var model: WispModel!
     private(set) var panel: PanelController!
     private let hotkeys = HotKeyCenter()
     private var statusItem: NSStatusItem!
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let (loaded, error) = AppConfig.load()
         config = loaded
         configDate = Self.configModificationDate()
-        model = SpotlightModel(config: config)
+        model = WispModel(config: config)
         panel = PanelController(model: model)
         model.onHistoryChanged = { [weak self] in self?.rebuildMenu() }
         setUpStatusItem()
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Grok Spotlight")
+            button.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Wisp")
             button.image?.isTemplate = true
         }
         let menu = NSMenu()
@@ -197,7 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Restart Grok Agent", #selector(menuRestart)))
         menu.addItem(item("Show Logs", #selector(menuLogs)))
         menu.addItem(.separator())
-        menu.addItem(item("Quit Grok Spotlight", #selector(menuQuit)))
+        menu.addItem(item("Quit Wisp", #selector(menuQuit)))
     }
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -239,6 +239,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Control commands
 
-    var spotlightModel: SpotlightModel { model }
+    var spotlightModel: WispModel { model }
 }
 

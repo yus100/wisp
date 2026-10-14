@@ -6,7 +6,7 @@ if arguments.count > 1, arguments[1] == "ctl" {
 }
 
 // A second launch just brings up the panel of the instance that is already running.
-let bundleId = Bundle.main.bundleIdentifier ?? "com.yus100.grokspotlight"
+let bundleId = Bundle.main.bundleIdentifier ?? "com.yus100.wisp"
 let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
     .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
 if !others.isEmpty {

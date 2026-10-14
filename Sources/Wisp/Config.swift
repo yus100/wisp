@@ -1,6 +1,6 @@
 import Foundation
 
-/// User settings, read from `~/.config/grok-spotlight/config.json`. Missing keys fall back to defaults.
+/// User settings, read from `~/.config/wisp/config.json`. Missing keys fall back to defaults.
 struct AppConfig: Codable {
     /// Tap to show/hide the panel; hold to talk (release sends).
     var hotkey = "option+space"
@@ -44,7 +44,7 @@ struct AppConfig: Codable {
     }
 
     static var directory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/grok-spotlight")
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/wisp")
     }
 
     static var fileURL: URL { directory.appendingPathComponent("config.json") }
@@ -77,13 +77,13 @@ struct AppConfig: Codable {
 enum AppPaths {
     static var support: URL {
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("GrokSpotlight")
+            .appendingPathComponent("Wisp")
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
 
     static var logs: URL {
-        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/GrokSpotlight")
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Wisp")
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

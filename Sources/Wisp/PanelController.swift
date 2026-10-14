@@ -2,17 +2,17 @@ import AppKit
 import SwiftUI
 
 /// Borderless floating panel that takes keyboard focus without activating the app, like Spotlight.
-final class SpotlightPanel: NSPanel {
+final class WispPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
 
 @MainActor
 final class PanelController: NSObject, NSWindowDelegate {
-    let model: SpotlightModel
-    private let panel: SpotlightPanel
+    let model: WispModel
+    private let panel: WispPanel
     private let effectView = NSVisualEffectView()
-    private var hostingView: NSHostingView<SpotlightView>!
+    private var hostingView: NSHostingView<WispView>!
     private var keyMonitor: Any?
     private let width: CGFloat = 720
     private let cornerRadius: CGFloat = 16
@@ -20,9 +20,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var pendingHeight: CGFloat?
     private var measuredHeight: CGFloat = 56
 
-    init(model: SpotlightModel) {
+    init(model: WispModel) {
         self.model = model
-        panel = SpotlightPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 60),
+        panel = WispPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 60),
                                styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
                                backing: .buffered, defer: false)
         super.init()
@@ -46,7 +46,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         effectView.maskImage = Self.roundedMask(radius: cornerRadius)
 
         let maxHeight = (NSScreen.main?.visibleFrame.height ?? 900) * 0.62
-        let root = SpotlightView(model: model, width: width, maxConversationHeight: maxHeight - 120) { [weak self] height in
+        let root = WispView(model: model, width: width, maxConversationHeight: maxHeight - 120) { [weak self] height in
             self?.resize(to: height)
         }
         hostingView = NSHostingView(rootView: root)

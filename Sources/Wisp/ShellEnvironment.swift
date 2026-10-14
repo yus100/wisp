@@ -6,7 +6,7 @@ import Foundation
 /// Homebrew, language toolchains, or `grok` itself. Running the shell once with `-ilc` picks up
 /// everything `.zprofile` and `.zshrc` export, the same way a terminal session would.
 enum ShellEnvironment {
-    private static let marker = "__GROK_SPOTLIGHT_ENV__"
+    private static let marker = "__WISP_ENV__"
 
     static func resolve(timeout: TimeInterval = 10) -> [String: String] {
         var env = ProcessInfo.processInfo.environment

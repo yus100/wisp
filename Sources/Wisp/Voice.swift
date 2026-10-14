@@ -22,7 +22,7 @@ final class VoiceSession {
 
     var onEvent: ((Event) -> Void)?
 
-    private let queue = DispatchQueue(label: "grok-spotlight.voice")
+    private let queue = DispatchQueue(label: "wisp.voice")
     private let engine = AVAudioEngine()
     private var micRunning = false
     private var urlSession: URLSession?
@@ -70,7 +70,7 @@ final class VoiceSession {
     }
 
     /// Streams a 16 kHz mono 16-bit WAV file in real time instead of the microphone, then finishes.
-    /// Used by `GrokSpotlight ctl voice-file` to test the speech path without a mic.
+    /// Used by `Wisp ctl voice-file` to test the speech path without a mic.
     func startFile(_ url: URL) throws {
         let wav = try Data(contentsOf: url)
         var offset = 12

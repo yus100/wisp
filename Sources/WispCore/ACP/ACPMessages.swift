@@ -91,6 +91,12 @@ struct SessionParams: Encodable, Sendable {
     let sessionId: String
 }
 
+struct LoadSessionParams: Encodable, Sendable {
+    let sessionId: String
+    let cwd: String
+    let mcpServers: [String] = []
+}
+
 struct SetConfigOptionParams: Encodable, Sendable {
     let sessionId: String
     let configId: String

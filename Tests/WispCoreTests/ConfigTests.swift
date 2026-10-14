@@ -24,6 +24,7 @@ import Testing
         #expect(config.ghosttyTarget == .tab)
         #expect(config.hotkey == "option+space")
         #expect(config.reasoningEffort == "low")
+        #expect(!config.remoteControl)
         try? FileManager.default.removeItem(at: directory)
     }
 

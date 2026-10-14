@@ -61,7 +61,7 @@ import Testing
         let session = try await agent.newSession(in: "/tmp", rules: "")
         _ = try await agent.prompt("permit", in: session.sessionId)
         _ = try await agent.prompt("fs", in: session.sessionId)
-        #expect(recorder.updates == [.messageChunk("approved:always"), .messageChunk("error:-32601")])
+        #expect(recorder.updates == [.messageChunk("approved:once"), .messageChunk("error:-32601")])
     }
 
     @Test func switchingModelsLearnsTheirEffortLevels() async throws {
@@ -74,6 +74,13 @@ import Testing
         let result = try await agent.prompt("hello", in: session.sessionId)
         #expect(result.modelID == "claude-test")
         await agent.close(session.sessionId)
+    }
+
+    @Test func loadReattachesASavedSession() async throws {
+        let (agent, recorder) = try await startAgent()
+        defer { agent.stop() }
+        try await agent.load("session-1", in: "/tmp")
+        try await waitFor { await MainActor.run { recorder.updates == [.messageChunk("(replayed history)")] } }
     }
 
     @Test func crashFailsTheTurnAndReportsTheExit() async throws {

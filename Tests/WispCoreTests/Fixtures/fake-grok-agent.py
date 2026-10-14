@@ -65,7 +65,8 @@ for line in sys.stdin:
             send({"jsonrpc": "2.0", "id": "perm-1", "method": "session/request_permission", "params": {
                 "sessionId": session_id, "options": [
                     {"optionId": "reject", "kind": "reject_once"},
-                    {"optionId": "always", "kind": "allow_always"}]}})
+                    {"optionId": "always", "kind": "allow_always"},
+                    {"optionId": "once", "kind": "allow_once"}]}})
             chunk(session_id, "approved:" + read_reply()["result"]["outcome"]["optionId"])
         elif text == "fs":
             send({"jsonrpc": "2.0", "id": 99, "method": "fs/read_text_file", "params": {"path": "/etc/hosts"}})
@@ -78,6 +79,9 @@ for line in sys.stdin:
             update(session_id, {"sessionUpdate": "plan", "entries": []})
             chunk(session_id, "world")
         send({"jsonrpc": "2.0", "id": request_id, "result": {"stopReason": "end_turn", "_meta": {"modelId": model}}})
+    elif method == "session/load":
+        send({"jsonrpc": "2.0", "id": request_id, "result": {}})
+        chunk(params["sessionId"], "(replayed history)")
     elif method == "session/close":
         send({"jsonrpc": "2.0", "id": request_id, "result": None})
     elif method == "session/cancel":

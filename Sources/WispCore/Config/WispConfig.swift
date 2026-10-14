@@ -28,6 +28,9 @@ public struct WispConfig: Codable, Equatable, Sendable {
     public var ghosttyTarget = GhosttyTarget.window
     /// Extra instructions appended to the quick-answer rules.
     public var extraRules = ""
+    /// Accept `Wisp ctl` commands. Off by default: when on, any process running as you can drive the
+    /// always-approve agent and the microphone through Wisp's privacy permissions.
+    public var remoteControl = false
 
     public init() {}
 
@@ -45,6 +48,7 @@ public struct WispConfig: Codable, Equatable, Sendable {
         voiceSilenceSeconds = try container.decode(.voiceSilenceSeconds, default: defaults.voiceSilenceSeconds)
         ghosttyTarget = try container.decode(.ghosttyTarget, default: defaults.ghosttyTarget)
         extraRules = try container.decode(.extraRules, default: defaults.extraRules)
+        remoteControl = try container.decode(.remoteControl, default: defaults.remoteControl)
     }
 
     /// Reads the config, writing the defaults on first run so every setting is discoverable.

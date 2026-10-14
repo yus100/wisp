@@ -92,10 +92,14 @@ public enum SpeechToText {
         socket: URLSessionWebSocketTask, audio: AsyncStream<Data>, options: Options,
         emit: @escaping @Sendable (Event) -> Void
     ) async throws {
-        try await withDeadline(options.connectTimeout, "the server to accept the stream") {
-            while true {
-                if case .ready? = try await nextEvent(socket) { return }
+        do {
+            try await withDeadline(options.connectTimeout, "the server to accept the stream") {
+                while true {
+                    if case .ready? = try await nextEvent(socket) { return }
+                }
             }
+        } catch let timeout as TimedOut {
+            throw Failure.timedOut(timeout.what)
         }
         emit(.ready)
 
@@ -159,20 +163,5 @@ public enum SpeechToText {
         default:
             return nil
         }
-    }
-}
-
-/// Runs `operation`, failing with `SpeechToText.Failure.timedOut` if it takes longer than `limit`.
-func withDeadline<T: Sendable>(
-    _ limit: Duration, _ what: String, operation: @escaping @Sendable () async throws -> T
-) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await operation() }
-        group.addTask {
-            try await Task.sleep(for: limit)
-            throw SpeechToText.Failure.timedOut(what)
-        }
-        defer { group.cancelAll() }
-        return try await group.next()!
     }
 }

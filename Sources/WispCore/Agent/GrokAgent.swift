@@ -88,11 +88,19 @@ public final class GrokAgent {
             await connection.close()
         }
 
-        let result = try await connection.request(
-            "initialize",
-            params: InitializeParams(clientInfo: .init(name: "wisp", version: launch.clientVersion)),
-            as: InitializeResult.self)
-        catalog = ModelCatalog(result)
+        do {
+            let clientVersion = launch.clientVersion
+            let result = try await withDeadline(.seconds(30), "grok to start") {
+                try await connection.request(
+                    "initialize",
+                    params: InitializeParams(clientInfo: .init(name: "wisp", version: clientVersion)),
+                    as: InitializeResult.self)
+            }
+            catalog = ModelCatalog(result)
+        } catch {
+            stop()
+            throw error
+        }
         Log.info("agent started (\(catalog.models.count) models, default \(catalog.defaultModelID ?? "unknown"))")
     }
 
@@ -124,6 +132,13 @@ public final class GrokAgent {
     /// Asks the agent to stop the running turn; `prompt` then returns with stop reason `cancelled`.
     public func cancel(_ sessionID: String) async {
         await connection?.notify("session/cancel", params: SessionParams(sessionId: sessionID))
+    }
+
+    /// Re-attaches a saved session, for example after the agent restarted. grok replays the history as
+    /// updates; they arrive while no turn is running, so `Conversation` ignores them.
+    public func load(_ sessionID: String, in directory: String) async throws {
+        _ = try await requireConnection().request(
+            "session/load", params: LoadSessionParams(sessionId: sessionID, cwd: directory), as: EmptyResult.self)
     }
 
     /// Unloads a session from this agent. It stays on disk, so `grok --resume` can pick it up.
@@ -160,9 +175,10 @@ public final class GrokAgent {
         case .notification:
             break
         case .request(let id, "session/request_permission", let data):
-            // Sessions run with always-approve, so this should not happen; approving keeps a turn from hanging if it does.
+            // Sessions run with always-approve, so this should not happen. Approving once keeps the turn from
+            // hanging without saving an "always allow" rule into the user's own grok settings.
             let options = (try? decoder.decode(IncomingParams<PermissionRequest>.self, from: data).params.options) ?? []
-            let choice = options.first { $0.kind == "allow_always" } ?? options.first { $0.kind == "allow_once" } ?? options.first
+            let choice = options.first { $0.kind == "allow_once" } ?? options.first { $0.kind?.hasPrefix("allow") == true }
             let outcome = choice.map { PermissionResponse.Outcome(outcome: "selected", optionId: $0.optionId) }
                 ?? PermissionResponse.Outcome(outcome: "cancelled", optionId: nil)
             await connection.respond(to: id, result: PermissionResponse(outcome: outcome))

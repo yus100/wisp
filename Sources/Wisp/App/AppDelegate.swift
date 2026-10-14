@@ -1,0 +1,102 @@
+import AppKit
+import WispCore
+
+/// Builds the app's objects and connects the hotkeys, config, panel, and menu bar.
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let paths = WispPaths.standard
+    private let hotkeys = HotkeyController()
+    private var configStore: ConfigStore!
+    private var model: AppModel!
+    private var panel: PanelController!
+    private var statusMenu: StatusMenuController?
+    private var control: ControlServer?
+    private var terminationSignal: DispatchSourceSignal?
+    private var panelWasOpenOnPress = false
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Log.enable(in: paths.logs)
+        configStore = ConfigStore(file: paths.configFile)
+        model = AppModel(configStore: configStore, paths: paths)
+        panel = PanelController(model: model)
+        statusMenu = StatusMenuController(
+            model: model,
+            showPanel: { [weak self] in self?.panel.show() },
+            startVoice: { [weak self] in self?.toggleVoice() })
+        control = ControlServer(model: model, panel: panel) { [weak self] in self?.configStore.config.remoteControl ?? false }
+
+        configStore.onChange = { [weak self] old, new, fromDisk in self?.configChanged(from: old, to: new, fromDisk: fromDisk) }
+        configStore.onReloadProblem = { [weak self] problem in self?.model.notice = Notice(problem) }
+        hotkeys.onMainKey = { [weak self] in self?.mainKey($0) }
+        hotkeys.onVoiceKey = { [weak self] in self?.toggleVoice() }
+        if let problem = registerHotkeys() ?? configStore.problem { model.notice = Notice(problem) }
+
+        model.warmUp()
+        quitCleanlyOnSIGTERM()
+        Log.info("launched")
+    }
+
+    /// Opening Wisp again from Finder, Spotlight, or `open` shows the panel.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        panel.show()
+        return false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        model.shutdown()
+    }
+
+    // MARK: Hotkeys
+
+    private func registerHotkeys() -> String? {
+        hotkeys.register(mainKey: configStore.config.hotkey, voiceKey: configStore.config.voiceHotkey)
+    }
+
+    /// Tap toggles the panel; hold talks (push-to-talk) and sends on release.
+    private func mainKey(_ event: HotkeyController.MainKeyEvent) {
+        let voice = model.voice
+        switch event {
+        case .pressed:
+            panelWasOpenOnPress = panel.isVisible
+            if !panel.isVisible { panel.show() }
+        case .holdBegan:
+            guard !voice.isActive else { return }
+            if !panel.isVisible { panel.show() }
+            model.startVoice(.pushToTalk)
+        case .released(held: true):
+            if voice.isActive, voice.mode == .pushToTalk { voice.finish(send: true) }
+        case .released(held: false):
+            guard panelWasOpenOnPress else { return }
+            if voice.isActive { voice.finish(send: true) } else { panel.hide() }
+        }
+    }
+
+    private func toggleVoice() {
+        if model.voice.isActive {
+            model.voice.finish(send: true)
+        } else {
+            panel.show()
+            model.startVoice(.handsFree)
+        }
+    }
+
+    // MARK: Config
+
+    private func configChanged(from old: WispConfig, to new: WispConfig, fromDisk: Bool) {
+        model.configDidChange(from: old, to: new)
+        var problem: String?
+        if old.hotkey != new.hotkey || old.voiceHotkey != new.voiceHotkey {
+            problem = registerHotkeys()
+        }
+        if fromDisk { model.notice = Notice(problem ?? "Config reloaded.") }
+    }
+
+    /// `kill` and `make install` send SIGTERM; route it through a normal quit so the agent stops too.
+    private func quitCleanlyOnSIGTERM() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApp.terminate(nil) }
+        source.resume()
+        terminationSignal = source
+    }
+}

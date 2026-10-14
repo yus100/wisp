@@ -12,7 +12,6 @@ let package = Package(
         .executableTarget(
             name: "Wisp",
             dependencies: ["WispCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AVFoundation"),

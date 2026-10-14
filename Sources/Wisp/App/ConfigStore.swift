@@ -14,6 +14,8 @@ final class ConfigStore {
     var onReloadProblem: ((_ problem: String) -> Void)?
 
     private let file: URL
+    /// The file actually watched: `file` with any symlink resolved.
+    private var watchedFile: URL { file.resolvingSymlinksInPath() }
     private var directoryWatch: DispatchSourceFileSystemObject?
     private var fileWatch: DispatchSourceFileSystemObject?
 
@@ -42,21 +44,27 @@ final class ConfigStore {
 
     // MARK: Watching
 
+    /// Read-only: a file that is briefly missing (editors that delete, then write) leaves the config as is.
     private func reload() {
-        let (loaded, problem) = WispConfig.load(from: file)
-        let newProblem = problem != nil && problem != self.problem
-        self.problem = problem
-        if let problem, newProblem { onReloadProblem?(problem) }
-        guard problem == nil, loaded != config else { return }
-        let old = config
-        config = loaded
-        onChange?(old, loaded, true)
+        switch WispConfig.read(from: file) {
+        case .missing:
+            return
+        case .invalid(let message):
+            if message != problem { onReloadProblem?(message) }
+            problem = message
+        case .loaded(let loaded):
+            problem = nil
+            guard loaded != config else { return }
+            let old = config
+            config = loaded
+            onChange?(old, loaded, true)
+        }
     }
 
     /// Editors either rewrite the file in place or replace it, so watch both the file and its folder,
     /// and re-arm the file watch whenever the file is replaced.
     private func watch() {
-        let directory = file.deletingLastPathComponent()
+        let directory = watchedFile.deletingLastPathComponent()
         directoryWatch = makeSource(path: directory.path, events: [.write]) { [weak self] in
             self?.rewatchFile()
             self?.reload()
@@ -66,7 +74,7 @@ final class ConfigStore {
 
     private func rewatchFile() {
         fileWatch?.cancel()
-        fileWatch = makeSource(path: file.path, events: [.write, .extend, .delete, .rename]) { [weak self] in
+        fileWatch = makeSource(path: watchedFile.path, events: [.write, .extend, .delete, .rename]) { [weak self] in
             self?.reload()
         }
     }

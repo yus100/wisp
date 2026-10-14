@@ -55,4 +55,16 @@ import Testing
             Self.script, arguments: ["--dry-run"], environment: ["HOME": "/tmp", "WISP_GHOSTTY_TARGET": "tab"])
         #expect(String(decoding: script.stdout, as: UTF8.self).contains("target: tab"))
     }
+
+    /// Sessions the agent opens follow `ghosttyTarget` live, read from the config file.
+    @Test func targetFallsBackToTheConfigFile() async throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: "wisp-home-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        var config = WispConfig()
+        config.ghosttyTarget = .tab
+        try config.save(to: home.appending(path: ".config/wisp/config.json"))
+        let result = try await ProcessRunner.run(
+            Self.script, arguments: ["--dry-run", "--cwd", "/tmp"], environment: ["HOME": home.path])
+        #expect(String(decoding: result.stdout, as: UTF8.self).contains("target: tab"))
+    }
 }

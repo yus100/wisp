@@ -43,7 +43,6 @@ final class VoiceController: ObservableObject {
 
     private var generation: UUID?
     private var microphone: MicrophoneCapture?
-    private var transcript = TranscriptAssembler()
     private var sendWhenDone = false
     private var stopRequested = false
     private var heardSpeech = false
@@ -58,7 +57,6 @@ final class VoiceController: ObservableObject {
         generation = id
         self.mode = mode
         state = .starting
-        transcript = TranscriptAssembler()
         sendWhenDone = recording != nil
         stopRequested = false
         heardSpeech = false
@@ -87,12 +85,14 @@ final class VoiceController: ObservableObject {
 
     // MARK: Private
 
+    /// One dictation. Its transcript is local, and every step checks `generation`: a cancelled stream
+    /// ends its loop without throwing, so the checks are what keep stale text out of the input.
     private func run(_ id: UUID, recording: Data?) async {
+        var transcript = TranscriptAssembler()
         do {
             let audio = try await openAudio(id, recording: recording)
-            guard let audio, generation == id else { return complete(id, error: nil) }
+            guard let audio, generation == id else { return complete(id, text: "", error: nil) }
             state = stopRequested ? .finishing : .listening
-            armNoSpeechWatchdog(id)
 
             guard let credentials else { throw GrokCredentials.Failure.notSignedIn }
             let bearer = try await credentials()
@@ -100,15 +100,14 @@ final class VoiceController: ObservableObject {
             options.language = language
             for try await event in SpeechToText.transcribe(audio, bearer: bearer, options: options) {
                 guard generation == id else { return }
-                handle(event, id)
+                handle(event, transcript: &transcript, id)
             }
+            guard generation == id else { return }
             transcript.commitPreview()
             onTranscript?(transcript.text)
-            complete(id, error: nil)
-        } catch is CancellationError {
-            return
+            complete(id, text: transcript.text, error: nil)
         } catch {
-            complete(id, error: error)
+            complete(id, text: transcript.text, error: error is CancellationError ? nil : error)
         }
     }
 
@@ -135,7 +134,9 @@ final class VoiceController: ObservableObject {
         return stream
     }
 
-    private func handle(_ event: SpeechToText.Event, _ id: UUID) {
+    private func handle(_ event: SpeechToText.Event, transcript: inout TranscriptAssembler, _ id: UUID) {
+        // Time "no speech" from when the stream is up, not from the token refresh or connect before it.
+        if case .ready = event { armNoSpeechWatchdog(id) }
         let finishedUtterance = transcript.apply(event)
         if case .partial(let text, _, _) = event, !text.trimmingCharacters(in: .whitespaces).isEmpty {
             heardSpeech = true
@@ -160,10 +161,9 @@ final class VoiceController: ObservableObject {
         }
     }
 
-    private func complete(_ id: UUID, error: Error?) {
+    private func complete(_ id: UUID, text: String, error: Error?) {
         guard generation == id else { return }
         generation = nil
-        let text = transcript.text
         let send = sendWhenDone && !text.isEmpty
         reset()
         if let error { onNotice?(error.localizedDescription) }

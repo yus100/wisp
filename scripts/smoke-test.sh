@@ -7,7 +7,13 @@ set -euo pipefail
 
 CTL="${WISP_APP:-$HOME/Applications/Wisp.app}/Contents/MacOS/Wisp"
 OUT="$(mktemp -d "${TMPDIR:-/tmp}/wisp-smoke.XXXXXX")"
-trap 'rm -rf "$OUT"' EXIT
+original_model=""
+restore_model=false
+cleanup() {
+  $restore_model && "$CTL" ctl model "$original_model"
+  rm -rf "$OUT"
+}
+trap cleanup EXIT
 
 pass() { printf '  ok  %s\n' "$1"; }
 fail() {
@@ -34,6 +40,7 @@ wait_idle() {
 pgrep -x Wisp >/dev/null || fail "Wisp is not running (make install)"
 state
 original_model="$(python3 -c "import json; print(json.load(open('$HOME/.config/wisp/config.json')).get('model', ''))")"
+restore_model=true
 
 press cmd+n
 sleep 0.3
@@ -59,7 +66,6 @@ sleep 0.5
 "$CTL" ctl ask "reply with just: pong"
 wait_idle
 [ "$(field "d['turns'][-1]['model']")" = "$first_other" ] && pass "model switch applies mid-conversation ($first_other)" || fail "model: $(field "d['turns'][-1]")"
-"$CTL" ctl model "$original_model"
 
 press shift+return
 "$CTL" ctl type "x"

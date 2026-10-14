@@ -46,7 +46,7 @@ Voice uses the speech-to-text service Grok Build's voice mode uses (`wss://api.x
 
 ### Dev sessions in Ghostty
 
-- **`⌘↩` on a conversation** stops any running answer, unloads the session from Wisp, and runs `grok --resume <id>` in a new Ghostty window. The TUI picks up with the full context. If Ghostty can't open, the conversation stays in the panel.
+- **`⌘↩` on a conversation** stops any running answer, unloads the session from Wisp, and runs `grok --resume <id>` in Ghostty (a new window, or a tab with `"ghosttyTarget": "tab"`). The TUI picks up with the full context. If Ghostty can't open, the conversation stays in the panel.
 - **Asking for work** ("start a dev session in my website repo to add a blog page") makes the agent find the project directory, write a self-contained brief, and open `grok -- "<brief>"` there.
 - The command is typed into a fresh login shell, so grok gets your normal environment, it lands in your shell history, and you are left in the project directory when grok exits.
 - The same opener works from any terminal: `~/Applications/Wisp.app/Contents/Resources/ghostty-grok --cwd ~/code/app --prompt "fix the login bug"`. Run it with `--help` for the options.

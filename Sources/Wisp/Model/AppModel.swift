@@ -32,7 +32,6 @@ final class AppModel: ObservableObject {
 
     /// Hide the panel (after a hand-off opens Ghostty).
     var onRequestHide: (() -> Void)?
-    var onHistoryChange: (() -> Void)?
 
     private let configStore: ConfigStore
     private let host: AgentHost
@@ -40,6 +39,13 @@ final class AppModel: ObservableObject {
     private var lastActivity = Date()
     private var promptTask: Task<Void, Never>?
     private var voiceBaseText = ""
+    /// Identifies the current conversation, so work that outlives it cannot touch its replacement.
+    private var conversationID = UUID()
+    /// ⌘. arrived before the turn's session existed; the turn stops as soon as it does.
+    private var stopRequested = false
+    /// A `session/load` in flight. Follow-ups wait for it, and the history it replays is ignored.
+    private var reattaching: Task<Void, Never>?
+    private var ignoringUpdates = false
 
     init(configStore: ConfigStore, paths: WispPaths = .standard) {
         self.configStore = configStore
@@ -118,28 +124,38 @@ final class AppModel: ObservableObject {
         }
         input = ""
         notice = nil
+        stopRequested = false
         conversation.begin(query)
         let turnID = conversation.turns.last?.id
+        let conversationID = conversationID
         lastActivity = Date()
         promptTask = Task {
+            defer { lastActivity = Date() }
             do {
-                let (agent, session) = try await activeSession()
+                let (agent, session) = try await activeSession(for: conversationID)
                 history.record(session, title: conversation.turns.first?.query ?? query, directory: host.workingDirectory)
-                onHistoryChange?()
+                if stopRequested {
+                    stopRequested = false
+                    conversation.finish(stopReason: "cancelled", model: nil)
+                    return
+                }
                 let result = try await agent.prompt(query, in: session)
                 guard conversation.turns.last?.id == turnID else { return }
                 conversation.finish(stopReason: result.stopReason, model: result.modelID)
+                host.refreshCatalog()
             } catch {
-                guard conversation.turns.last?.id == turnID else { return }
+                guard conversation.turns.last?.id == turnID, !(error is CancellationError) else { return }
                 conversation.fail(error.localizedDescription)
             }
-            host.refreshCatalog()
-            lastActivity = Date()
         }
     }
 
     func cancel() {
-        guard isWorking, let sessionID else { return }
+        guard isWorking else { return }
+        guard let sessionID else {
+            stopRequested = true
+            return
+        }
         Task { try? await host.running().cancel(sessionID) }
     }
 
@@ -150,6 +166,8 @@ final class AppModel: ObservableObject {
             if isWorking { Task { try? await host.running().cancel(sessionID) } }
             Task { try? await host.running().close(sessionID) }
         }
+        conversationID = UUID()
+        stopRequested = false
         sessionID = nil
         conversation = Conversation(paths: paths)
         input = ""
@@ -166,20 +184,36 @@ final class AppModel: ObservableObject {
     }
 
     private func apply(_ notification: SessionNotification) {
-        guard notification.sessionId == sessionID else { return }
+        guard !ignoringUpdates, notification.sessionId == sessionID else { return }
         conversation.apply(notification.update)
     }
 
-    /// The current session, creating it (with model settings applied) on first use.
-    private func activeSession() async throws -> (GrokAgent, String) {
+    /// The current session, creating it (with model settings applied) on first use. Throws
+    /// `CancellationError` if the conversation was replaced while the session was being created.
+    private func activeSession(for conversation: UUID) async throws -> (GrokAgent, String) {
+        if let reattaching { await reattaching.value }
         let agent = try await host.running()
+        guard conversationID == conversation else { throw CancellationError() }
         if let sessionID { return (agent, sessionID) }
         let rules = QuickAnswerRules.text(
             workingDirectory: host.workingDirectory, ghosttyScript: Self.ghosttyScript.path, extra: config.extraRules)
         let session = try await agent.newSession(in: host.workingDirectory, rules: rules).sessionId
+        guard conversationID == conversation else {
+            await agent.close(session)
+            throw CancellationError()
+        }
         sessionID = session
         await applyModelSettings(to: session, on: agent)
         return (agent, session)
+    }
+
+    /// Loads a saved session into the agent. grok replays its history as updates, which must not
+    /// land in a running turn, so updates are ignored until the load returns (they all arrive before it).
+    private func reattach(_ session: String, on agent: GrokAgent) async throws {
+        ignoringUpdates = true
+        defer { ignoringUpdates = false }
+        try await agent.load(session, in: host.workingDirectory)
+        await applyModelSettings(to: session, on: agent)
     }
 
     /// The agent crashed: fail the running turn, then re-attach the session on a fresh agent so
@@ -187,11 +221,10 @@ final class AppModel: ObservableObject {
     private func agentDied(status: Int32) {
         if isWorking { conversation.fail("Grok stopped unexpectedly (status \(status)). Ask again to continue.") }
         guard let session = sessionID else { return }
-        Task {
+        reattaching = Task {
+            defer { reattaching = nil }
             do {
-                let agent = try await host.running()
-                try await agent.load(session, in: host.workingDirectory)
-                await applyModelSettings(to: session, on: agent)
+                try await reattach(session, on: try await host.running())
             } catch {
                 if sessionID == session { sessionID = nil }
                 notice = Notice("Grok restarted, so follow-ups start a new session.")
@@ -259,7 +292,7 @@ final class AppModel: ObservableObject {
 
     static var ghosttyScript: URL {
         Bundle.main.url(forResource: "ghostty-grok", withExtension: nil)
-            ?? URL(filePath: "/Applications/Wisp.app/Contents/Resources/ghostty-grok")
+            ?? WispPaths.standard.home.appending(path: "Applications/Wisp.app/Contents/Resources/ghostty-grok")
     }
 
     /// ⌘↩: typed text becomes a dev task the agent routes to the right project; otherwise this
@@ -286,9 +319,9 @@ final class AppModel: ObservableObject {
         Task {
             defer { isHandingOff = false }
             let agent = try? await host.running()
-            if isWorking, let agent, let promptTask {
+            if isWorking, let agent {
                 await agent.cancel(session)
-                _ = try? await withDeadline(.seconds(5), "the answer to stop") { await promptTask.value }
+                for _ in 0..<50 where isWorking { try? await Task.sleep(for: .milliseconds(100)) }
             }
             // Unload here first so the TUI is the only process writing the session.
             await agent?.close(session)
@@ -300,7 +333,7 @@ final class AppModel: ObservableObject {
                 }
                 onRequestHide?()
             } catch {
-                try? await agent?.load(session, in: host.workingDirectory)
+                if let agent { try? await reattach(session, on: agent) }
                 show(error)
                 focusRequest += 1
             }

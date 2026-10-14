@@ -113,6 +113,9 @@ final class ControlServer {
     }
 
     private func run(_ command: String, _ argument: String) {
+        pruneExchange()
+        // A staged recording is consumed (or discarded) whatever happens to the command.
+        let recording = command == "voice-file" ? takeExchangeFile(argument) : nil
         guard RemoteControl.alwaysAllowed.contains(command) || isEnabled() else {
             Log.info("ctl: ignored \(command); remoteControl is off")
             return
@@ -132,8 +135,7 @@ final class ControlServer {
                 model.startVoice(.handsFree)
             }
         case "voice-file":
-            guard let file = exchangeFile(argument), let recording = try? Data(contentsOf: file) else { return }
-            try? FileManager.default.removeItem(at: file)
+            guard let recording else { return }
             panel.show()
             model.startVoice(.handsFree, recording: recording)
         case "new": model.newConversation()
@@ -156,6 +158,26 @@ final class ControlServer {
             return nil
         }
         return RemoteControl.exchange.appending(path: name)
+    }
+
+    /// Reads and deletes a file the client staged.
+    private func takeExchangeFile(_ name: String) -> Data? {
+        guard let file = exchangeFile(name) else { return nil }
+        defer { try? FileManager.default.removeItem(at: file) }
+        return try? Data(contentsOf: file)
+    }
+
+    /// Clears files a client gave up waiting for.
+    private func pruneExchange() {
+        let fileManager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-60)
+        let files =
+            (try? fileManager.contentsOfDirectory(
+                at: RemoteControl.exchange, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff { try? fileManager.removeItem(at: file) }
+        }
     }
 
     private func write(_ data: Data?, to name: String) {

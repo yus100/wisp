@@ -37,7 +37,6 @@ final class AgentHost {
         let restart =
             config.workingDirectory != self.config.workingDirectory
             || config.grokPath != self.config.grokPath
-            || config.ghosttyTarget != self.config.ghosttyTarget
         self.config = config
         if restart { self.restart() }
         return restart
@@ -68,10 +67,11 @@ final class AgentHost {
         paths.grokHome(environment: resolvedEnvironment ?? [:])
     }
 
-    /// What the agent (and the `ghostty-grok` runs it makes) sees: the login environment plus Wisp's settings.
+    /// What the agent (and the `ghostty-grok` runs it makes) sees: the login environment plus the grok
+    /// path, when one is configured. `ghostty-grok` reads `ghosttyTarget` from the config file itself, so
+    /// changing it takes effect without restarting the agent.
     private func agentEnvironment(_ base: [String: String]) -> [String: String] {
         var environment = base
-        environment["WISP_GHOSTTY_TARGET"] = config.ghosttyTarget.rawValue
         if !config.grokPath.isEmpty { environment["WISP_GROK"] = paths.expand(config.grokPath) }
         return environment
     }

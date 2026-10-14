@@ -1,67 +1,143 @@
 #!/bin/bash
-# Open a Grok Build session in a new Ghostty window (or tab).
+# Open a Grok Build session in Ghostty.
 #
-#   ghostty-grok [--cwd DIR] [--prompt TEXT | --prompt-file FILE] [--resume SESSION_ID] [--tab]
+#   ghostty-grok [--cwd DIR] [--prompt TEXT | --prompt-file FILE] [--resume SESSION_ID]
+#                [--tab | --window] [--grok PATH] [--dry-run]
 #
-# The command is typed into your normal login shell, so when grok exits you are
-# left in a shell in DIR. The prompt travels in an environment variable, so any
-# quoting or newlines survive intact.
+#   --cwd DIR          directory the session starts in (default: home)
+#   --prompt TEXT      first message for a new session
+#   --prompt-file FILE read the first message from a file
+#   --resume ID        continue an existing session instead of starting one
+#   --tab, --window    open in a new tab of the front window, or a new window
+#                      (default: $WISP_GHOSTTY_TARGET, else window)
+#   --grok PATH        grok binary to run (default: $WISP_GROK, else grok on PATH)
+#   --dry-run          print what would be opened, without opening it
+#
+# The grok command is typed into a fresh login shell, so the session gets your
+# normal environment and shell history, and you are left in DIR when grok exits.
+# The prompt travels in an environment variable, so quoting and newlines survive.
+#
+# Exit status: 0 opened, 2 bad arguments, 3 Ghostty not installed or older than
+# 1.3, 4 Wisp is not allowed to control Ghostty, 5 any other Ghostty error.
 set -euo pipefail
 
-usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
+fail() {
+  echo "ghostty-grok: $2" >&2
+  exit "$1"
+}
 
 cwd="$HOME"
 prompt=""
 resume=""
+grok="${WISP_GROK:-grok}"
 target="${WISP_GHOSTTY_TARGET:-window}"
+dry_run=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --cwd) cwd="$2"; shift 2 ;;
-    --prompt) prompt="$2"; shift 2 ;;
-    --prompt-file) prompt="$(cat "$2")"; shift 2 ;;
-    --resume) resume="$2"; shift 2 ;;
+    --cwd) cwd="${2:?--cwd needs a directory}"; shift 2 ;;
+    --prompt) prompt="${2?--prompt needs text}"; shift 2 ;;
+    --prompt-file) prompt="$(cat "${2:?--prompt-file needs a path}")"; shift 2 ;;
+    --resume) resume="${2:?--resume needs a session ID}"; shift 2 ;;
+    --grok) grok="${2:?--grok needs a path}"; shift 2 ;;
     --tab) target="tab"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "ghostty-grok: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    --window) target="window"; shift ;;
+    --dry-run) dry_run=true; shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) usage >&2; fail 2 "unknown argument: $1" ;;
   esac
 done
 
+case "$target" in window | tab) ;; *) fail 2 "target must be window or tab, not '$target'" ;; esac
 cwd="${cwd/#\~/$HOME}"
-if [ ! -d "$cwd" ]; then
-  echo "ghostty-grok: no such directory: $cwd" >&2
-  exit 1
-fi
+[ -d "$cwd" ] || fail 2 "no such directory: $cwd"
 cwd="$(cd "$cwd" && pwd)"
+[[ -z "$resume" || "$resume" =~ ^[A-Za-z0-9._-]+$ ]] || fail 2 "not a session ID: $resume"
 
-cmd="grok"
-if [ -n "$resume" ]; then
-  cmd="$cmd --resume $(printf '%q' "$resume")"
-fi
-env_entries=()
+# What gets typed into the shell. Only fixed text and the validated session ID
+# appear here; the prompt is read from the environment, after `--` so a prompt
+# that starts with a dash is not taken for a flag.
+command="$(printf '%q' "$grok")"
+[ -n "$resume" ] && command+=" --resume $resume"
+environment=()
 if [ -n "$prompt" ]; then
-  env_entries+=("WISP_PROMPT=$prompt")
-  cmd="$cmd \"\$WISP_PROMPT\""
+  environment+=("WISP_PROMPT=$prompt")
+  command+=' -- "$WISP_PROMPT"'
 fi
 
-/usr/bin/osascript - "$cwd" "$cmd"$'\n' "$target" ${env_entries[@]+"${env_entries[@]}"} >/dev/null <<'APPLESCRIPT'
+if $dry_run; then
+  printf 'cwd: %s\ncommand: %s\ntarget: %s\n' "$cwd" "$command" "$target"
+  [ -n "$prompt" ] && printf 'WISP_PROMPT: %s\n' "$prompt"
+  exit 0
+fi
+
+bundle_id="com.mitchellh.ghostty"
+app="$(/usr/bin/mdfind "kMDItemCFBundleIdentifier == '$bundle_id'" 2>/dev/null | head -n 1)"
+for candidate in "$app" /Applications/Ghostty.app "$HOME/Applications/Ghostty.app"; do
+  [ -n "$candidate" ] && [ -d "$candidate" ] && app="$candidate" && break
+done
+[ -d "$app" ] || fail 3 "Ghostty is not installed. Get it from https://ghostty.org"
+version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist" 2>/dev/null || echo 0)"
+major="${version%%.*}"
+minor="${version#*.}"
+minor="${minor%%.*}"
+if [ "${major:-0}" -lt 1 ] || { [ "$major" -eq 1 ] && [ "${minor:-0}" -lt 3 ]; }; then
+  fail 3 "Ghostty $version is too old; Wisp needs 1.3 or later for its AppleScript support"
+fi
+
+was_running="$(/usr/bin/osascript -e "application id \"$bundle_id\" is running" 2>/dev/null || echo false)"
+
+# Runs inside Ghostty: makes the window or tab, then closes the window a cold launch opened.
+read -r -d '' applescript <<'APPLESCRIPT' || true
 on run argv
 	set theDir to item 1 of argv
 	set theInput to item 2 of argv
 	set theTarget to item 3 of argv
-	tell application "Ghostty"
+	set wasRunning to item 4 of argv is "true"
+	tell application id "com.mitchellh.ghostty"
+		-- A cold launch opens Ghostty's own first window; note it so it can be closed once ours exists.
+		set launchWindows to {}
+		if not wasRunning then
+			repeat 20 times
+				if (count of windows) > 0 then exit repeat
+				delay 0.1
+			end repeat
+			set launchWindows to id of every window
+		end if
+
 		set cfg to new surface configuration
 		set initial working directory of cfg to theDir
 		set initial input of cfg to theInput
-		if (count of argv) > 3 then set environment variables of cfg to items 4 thru -1 of argv
-		if theTarget is "tab" and (count of windows) > 0 then
+		if (count of argv) > 4 then set environment variables of cfg to items 5 thru -1 of argv
+		if theTarget is "tab" and wasRunning and (count of windows) > 0 then
 			new tab in front window with configuration cfg
 		else
 			new window with configuration cfg
 		end if
+
+		repeat with launchID in launchWindows
+			repeat with w in windows
+				if id of w is (launchID as text) then
+					close window w
+					exit repeat
+				end if
+			end repeat
+		end repeat
 		activate
 	end tell
-	return "opened"
 end run
 APPLESCRIPT
+
+set +e
+output="$(/usr/bin/osascript - "$cwd" "$command"$'\n' "$target" "$was_running" ${environment[@]+"${environment[@]}"} <<<"$applescript" 2>&1)"
+status=$?
+set -e
+
+if [ $status -ne 0 ]; then
+  case "$output" in
+    *-1743*) fail 4 "Wisp is not allowed to control Ghostty. Turn it on in System Settings > Privacy & Security > Automation, under Wisp." ;;
+    *) fail 5 "Ghostty could not open the session: $output" ;;
+  esac
+fi
 echo "Opened Grok Build in Ghostty at $cwd"

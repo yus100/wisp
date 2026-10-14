@@ -1,7 +1,7 @@
 import Foundation
 
 /// Every location Wisp reads or writes, rooted at one home directory so tests can redirect it.
-public struct WispPaths: Sendable {
+public struct WispPaths: Equatable, Sendable {
     public let home: URL
 
     public init(home: URL) {

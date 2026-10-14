@@ -46,9 +46,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         effectView.maskImage = Self.roundedMask(radius: cornerRadius)
 
         let maxHeight = (NSScreen.main?.visibleFrame.height ?? 900) * 0.62
-        let root = WispView(model: model, width: width, maxConversationHeight: maxHeight - 120) { [weak self] height in
-            self?.resize(to: height)
-        }
+        let root = WispView(model: model, width: width, maxConversationHeight: maxHeight - 120,
+                            onHeightChange: { [weak self] height in self?.resize(to: height) },
+                            onModelMenu: { [weak self] in self?.showModelMenu() })
         hostingView = NSHostingView(rootView: root)
         // The panel height follows the measured SwiftUI height (see `resize`); constraints derived from
         // the hosting view's own size would keep the window from shrinking.
@@ -196,12 +196,69 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard command else { return false }
         switch key {
         case "n": model.newConversation(); return true
+        case "m":
+            // Pop up after the monitor returns; the menu runs its own tracking loop.
+            DispatchQueue.main.async { self.showModelMenu() }
+            return true
         case ".": model.cancel(); return true
         case "w": hide(); return true
         case "c" where flags.contains(.shift): model.copyLastAnswer(); return true
         case ",": NSWorkspace.shared.open(AppConfig.fileURL); hide(); return true
         default: return false
         }
+    }
+
+    // MARK: Model menu
+
+    func showModelMenu() {
+        guard panel.isVisible else { return }
+        let menu = buildModelMenu()
+        // Drop the menu just under the input row, near the model chip on the right.
+        let origin = NSPoint(x: width - 250, y: effectView.bounds.height - 50)
+        menu.popUp(positioning: nil, at: origin, in: effectView)
+    }
+
+    func buildModelMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let current = model.effectiveModelId
+        menu.addItem(.sectionHeader(title: "Model"))
+        if model.models.isEmpty {
+            let loading = NSMenuItem(title: "Loading models…", action: nil, keyEquivalent: "")
+            loading.isEnabled = false
+            menu.addItem(loading)
+        }
+        for option in model.models {
+            let suffix = option.id == model.defaultModelId ? "   (Grok Build default)" : ""
+            let item = NSMenuItem(title: option.name + suffix, action: #selector(pickModel(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = option.id
+            item.state = option.id == current ? .on : .off
+            menu.addItem(item)
+        }
+        let efforts = model.effortOptions(for: current)
+        if !efforts.isEmpty {
+            menu.addItem(.separator())
+            menu.addItem(.sectionHeader(title: "Reasoning effort"))
+            for effort in efforts {
+                let item = NSMenuItem(title: WispModel.effortLabel(effort), action: #selector(pickEffort(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = effort
+                item.state = effort == model.config.reasoningEffort ? .on : .off
+                menu.addItem(item)
+            }
+        }
+        return menu
+    }
+
+    @objc private func pickModel(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        model.selectModel(id)
+    }
+
+    @objc private func pickEffort(_ sender: NSMenuItem) {
+        guard let effort = sender.representedObject as? String else { return }
+        model.selectEffort(effort)
     }
 
     // MARK: Testing

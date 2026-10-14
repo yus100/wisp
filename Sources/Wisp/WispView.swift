@@ -5,6 +5,7 @@ struct WispView: View {
     let width: CGFloat
     let maxConversationHeight: CGFloat
     var onHeightChange: (CGFloat) -> Void
+    var onModelMenu: () -> Void
 
     @FocusState private var inputFocused: Bool
     @State private var contentHeight: CGFloat = 0
@@ -42,6 +43,7 @@ struct WispView: View {
                 .font(.system(size: 22, weight: .light))
                 .lineLimit(1...6)
                 .focused($inputFocused)
+            modelChip
             micButton
         }
         .padding(.horizontal, 18)
@@ -64,6 +66,24 @@ struct WispView: View {
                 .font(.system(size: 19, weight: .regular))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var modelChip: some View {
+        Button(action: onModelMenu) {
+            HStack(spacing: 3) {
+                Text(model.modelLabel).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.primary.opacity(0.06)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Model and reasoning effort (⌘M)")
     }
 
     private var micButton: some View {

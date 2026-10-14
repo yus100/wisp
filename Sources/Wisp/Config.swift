@@ -54,12 +54,7 @@ struct AppConfig: Codable {
         let url = fileURL
         guard let data = try? Data(contentsOf: url) else {
             let config = AppConfig()
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            if let data = try? encoder.encode(config) {
-                try? data.write(to: url)
-            }
+            config.save()
             return (config, nil)
         }
         do {
@@ -67,6 +62,14 @@ struct AppConfig: Codable {
         } catch {
             return (AppConfig(), "Could not read \(url.path): \(error.localizedDescription). Using defaults.")
         }
+    }
+
+    func save() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        guard let data = try? encoder.encode(self) else { return }
+        try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+        try? data.write(to: Self.fileURL, options: .atomic)
     }
 
     var expandedWorkingDirectory: String {

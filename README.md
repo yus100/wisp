@@ -30,10 +30,13 @@ In the panel:
 | `⇧↩` | New line |
 | `⌘↩` | Continue this conversation in Ghostty. With text typed, start a dev session for that task instead |
 | `⌘N` | New conversation |
+| `⌘M` | Pick the model and reasoning effort (or click the model chip next to the mic) |
 | `⌘.` | Stop the current answer |
 | `⇧⌘C` | Copy the last answer |
 | `⌘,` | Edit the config |
 | `esc` | Close (or stop listening) |
+
+The model you pick applies right away, even mid-conversation, and is saved for next time. Quick answers default to your Grok Build model with low reasoning effort.
 
 The conversation survives closing the panel. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
 
@@ -55,8 +58,8 @@ Voice uses the same streaming speech-to-text endpoint as Grok Build (`wss://api.
 | --- | --- | --- |
 | `hotkey` | `option+space` | Tap to toggle, hold to talk |
 | `voiceHotkey` | `option+shift+space` | Hands-free voice |
-| `model` | `""` | Model for quick answers; empty uses your Grok Build default |
-| `reasoningEffort` | `low` | `minimal`, `low`, `medium`, `high`, `xhigh`, or empty for your default |
+| `model` | `""` | Model for quick answers (set by `⌘M`); empty uses your Grok Build default |
+| `reasoningEffort` | `low` | `minimal`, `low`, `medium`, `high`, `xhigh` (set by `⌘M`), or empty for your default |
 | `workingDirectory` | `~` | Where quick-answer sessions run |
 | `idleResetMinutes` | `10` | Start fresh after this much idle time; `0` never resets |
 | `voiceLanguage` | `en` | Speech-to-text language code |
@@ -92,6 +95,7 @@ The app binary doubles as a remote control for the running instance:
 ```sh
 APP=~/Applications/Wisp.app/Contents/MacOS/Wisp
 $APP ctl toggle                 # or show, hide, voice, new, ghostty
+$APP ctl model grok-4.7         # or: ctl effort medium
 $APP ctl ask "what's on my calendar today?"
 $APP ctl state /tmp/state.json  # panel state as JSON
 $APP ctl snapshot /tmp/p.png    # render the panel

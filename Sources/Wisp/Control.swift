@@ -19,6 +19,8 @@ enum ControlCommand {
       type <text>               type text into the panel as key presses
       key <keys>                press a key, e.g. return, escape, cmd+return, cmd+n
       voice-file <file.wav>     dictate a 16 kHz mono WAV file instead of the microphone
+      model <id>                use this model for quick answers (see `state` for the list)
+      effort <level>            set reasoning effort: minimal, low, medium, high, xhigh
     """
 
     /// Client side: post the command and, for commands that write a file, wait for it.
@@ -83,6 +85,8 @@ final class ControlServer {
                 panel.simulateKey(keyCode: 0, characters: String(character), modifiers: [])
             }
         case "key": pressKeys(argument, panel: panel)
+        case "model": model.selectModel(argument)
+        case "effort": model.selectEffort(argument)
         case "voice-file":
             delegate.showPanel()
             model.startVoice(mode: .handsFree, file: URL(fileURLWithPath: argument))
@@ -123,6 +127,7 @@ final class ControlServer {
                 "done": turn.done,
                 "cancelled": turn.cancelled,
                 "error": turn.error as Any,
+                "model": turn.model as Any,
                 "tools": turn.tools.map { ["title": $0.title, "status": $0.status] },
             ]
         }
@@ -133,6 +138,11 @@ final class ControlServer {
             "isWorking": model.isWorking,
             "sessionId": model.sessionId as Any,
             "notice": model.notice as Any,
+            "model": model.modelLabel,
+            "models": model.models.map(\.id),
+            "modelMenu": panel.buildModelMenu().items.map { item in
+                item.isSeparatorItem ? "---" : (item.state == .on ? "✓ " : "") + item.title
+            },
             "voice": ["active": model.voice.active, "connecting": model.voice.connecting,
                       "finishing": model.voice.finishing, "level": model.voice.level],
             "turns": turns,

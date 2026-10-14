@@ -24,6 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model = WispModel(config: config)
         panel = PanelController(model: model)
         model.onHistoryChanged = { [weak self] in self?.rebuildMenu() }
+        model.onConfigSaved = { [weak self] saved in
+            self?.config = saved
+            self?.configDate = Self.configModificationDate()
+        }
         setUpStatusItem()
         registerHotkeys()
         control = ControlServer(delegate: self)

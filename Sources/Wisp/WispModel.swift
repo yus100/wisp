@@ -20,7 +20,17 @@ final class WispModel: ObservableObject {
         var error: String?
         /// Transient progress note, such as a retry after an API error.
         var status: String?
+        /// Model that answered, as reported by the agent.
+        var model: String?
         fileprivate var breakBeforeNextText = false
+    }
+
+    struct ModelOption: Identifiable {
+        let id: String
+        let name: String
+        /// Reasoning efforts the model advertises; empty when the agent did not list them.
+        let efforts: [String]
+        let defaultEffort: String?
     }
 
     enum VoiceMode { case pushToTalk, handsFree }
@@ -39,10 +49,15 @@ final class WispModel: ObservableObject {
     @Published private(set) var voice = VoiceState()
     @Published var notice: String?
     @Published private(set) var focusRequest = 0
+    @Published private(set) var models: [ModelOption] = []
+    /// The default model from your Grok Build config.
+    @Published private(set) var defaultModelId: String?
 
     /// Asks the panel to hide (for example after handing a session to Ghostty).
     var onRequestHide: (() -> Void)?
     var onHistoryChanged: (() -> Void)?
+    /// Called after the app itself saves the config (model picker), so the delegate does not treat it as an edit.
+    var onConfigSaved: ((AppConfig) -> Void)?
 
     private(set) var config: AppConfig
     private(set) var sessionId: String?
@@ -53,6 +68,8 @@ final class WispModel: ObservableObject {
     private var agentStarting: Task<AgentClient, Error>?
     private var lastActivity = Date()
     private var epoch = 0
+    /// Effort levels reported by live sessions, for models whose initialize entry lists none.
+    private var sessionEfforts: [String: [String]] = [:]
 
     private var voiceSession: VoiceSession?
     private var voiceBase = ""
@@ -71,11 +88,15 @@ final class WispModel: ObservableObject {
     var hasConversation: Bool { !turns.isEmpty }
 
     func apply(config: AppConfig) {
-        let restart = config.model != self.config.model || config.reasoningEffort != self.config.reasoningEffort
-            || config.workingDirectory != self.config.workingDirectory || config.grokPath != self.config.grokPath
+        let restart = config.workingDirectory != self.config.workingDirectory || config.grokPath != self.config.grokPath
             || config.extraRules != self.config.extraRules
+        let modelChanged = config.model != self.config.model || config.reasoningEffort != self.config.reasoningEffort
         self.config = config
-        if restart { restartAgent() }
+        if restart {
+            restartAgent()
+        } else if modelChanged {
+            applyModelToCurrentSession()
+        }
     }
 
     // MARK: Panel lifecycle
@@ -157,11 +178,12 @@ final class WispModel: ObservableObject {
             client.onNotification = { [weak self] method, params in self?.handleNotification(method, params) }
             client.onExit = { [weak self, weak client] code in self?.agentExited(client, code: code) }
             try client.start()
-            _ = try await client.request("initialize", [
+            let initialized = try await client.request("initialize", [
                 "protocolVersion": 1,
                 "clientCapabilities": ["fs": ["readTextFile": false, "writeTextFile": false], "terminal": false],
                 "clientInfo": ["name": "wisp", "version": "0.1.0"],
             ])
+            loadModels(from: initialized)
             appLog("agent started")
             return client
         }
@@ -209,14 +231,97 @@ final class WispModel: ObservableObject {
             "_meta": ["yoloMode": true, "rules": rules],
         ])
         guard let id = result["sessionId"] as? String else { throw AgentError.rpc("session/new returned no session ID") }
+        learnEfforts(from: result)
+        await applyModelSettings(sessionId: id, agent: agent)
+        return id
+    }
+
+    // MARK: Model and effort
+
+    var effectiveModelId: String? { config.model.isEmpty ? defaultModelId : config.model }
+
+    var modelLabel: String {
+        let id = effectiveModelId
+        let name = models.first { $0.id == id }?.name ?? id ?? "Default model"
+        let effort = config.reasoningEffort
+        return effort.isEmpty ? name : "\(name) · \(Self.effortLabel(effort))"
+    }
+
+    static func effortLabel(_ effort: String) -> String {
+        effort == "xhigh" ? "Extra high" : effort.capitalized
+    }
+
+    func effortOptions(for modelId: String?) -> [String] {
+        guard let modelId else { return [] }
+        if let listed = models.first(where: { $0.id == modelId })?.efforts, !listed.isEmpty { return listed }
+        return sessionEfforts[modelId] ?? ["low", "medium", "high", "xhigh"]
+    }
+
+    /// Picks a model for quick answers, keeps the effort when the model supports it, and saves both.
+    func selectModel(_ id: String) {
+        var updated = config
+        updated.model = id
+        let options = effortOptions(for: id)
+        if !updated.reasoningEffort.isEmpty, !options.isEmpty, !options.contains(updated.reasoningEffort) {
+            let fallback = models.first { $0.id == id }?.defaultEffort
+            updated.reasoningEffort = options.contains("low") ? "low" : (fallback ?? options[0])
+        }
+        save(updated)
+    }
+
+    func selectEffort(_ effort: String) {
+        var updated = config
+        updated.reasoningEffort = effort
+        save(updated)
+    }
+
+    private func save(_ updated: AppConfig) {
+        config = updated
+        updated.save()
+        onConfigSaved?(updated)
+        applyModelToCurrentSession()
+        objectWillChange.send()
+    }
+
+    /// Applies the model and effort to the live session; new sessions pick them up in `ensureSession`.
+    private func applyModelToCurrentSession() {
+        objectWillChange.send()
+        guard let sessionId, let agent else { return }
+        Task { await applyModelSettings(sessionId: sessionId, agent: agent) }
+    }
+
+    private func applyModelSettings(sessionId id: String, agent: AgentClient) async {
         for (option, value) in [("model", config.model), ("reasoning_effort", config.reasoningEffort)] where !value.isEmpty {
             do {
-                _ = try await agent.request("session/set_config_option", ["sessionId": id, "configId": option, "value": value])
+                let result = try await agent.request("session/set_config_option",
+                                                     ["sessionId": id, "configId": option, "value": value])
+                learnEfforts(from: result)
             } catch {
                 appLog("could not set \(option)=\(value): \(error.localizedDescription)")
+                if option == "model" { notice = "Could not switch to \(value): \(error.localizedDescription)" }
             }
         }
-        return id
+    }
+
+    private func loadModels(from initialized: JSON) {
+        guard let state = (initialized["_meta"] as? JSON)?["modelState"] as? JSON else { return }
+        defaultModelId = state["currentModelId"] as? String
+        models = (state["availableModels"] as? [JSON] ?? []).compactMap { entry in
+            guard let id = entry["modelId"] as? String else { return nil }
+            let meta = entry["_meta"] as? JSON ?? [:]
+            let efforts = (meta["reasoningEfforts"] as? [JSON] ?? []).compactMap { $0["value"] as? String }
+            return ModelOption(id: id, name: (entry["name"] as? String) ?? id, efforts: efforts,
+                               defaultEffort: meta["reasoningEffort"] as? String)
+        }
+    }
+
+    /// `session/new` and `set_config_option` return the session's options, including the effort levels its model accepts.
+    private func learnEfforts(from result: JSON) {
+        guard let options = result["configOptions"] as? [JSON],
+              let model = options.first(where: { $0["id"] as? String == "model" })?["currentValue"] as? String,
+              let effort = options.first(where: { $0["id"] as? String == "reasoning_effort" }) else { return }
+        let values = (effort["options"] as? [JSON] ?? []).compactMap { $0["value"] as? String }
+        if !values.isEmpty { sessionEfforts[model] = values }
     }
 
     // MARK: Conversation
@@ -249,9 +354,11 @@ final class WispModel: ObservableObject {
                 ])
                 guard myEpoch == epoch else { return }
                 let stop = result["stopReason"] as? String
+                let answeredBy = (result["_meta"] as? JSON)?["modelId"] as? String
                 updateLastTurn {
                     $0.done = true
                     $0.cancelled = stop == "cancelled"
+                    $0.model = answeredBy
                 }
             } catch {
                 guard myEpoch == epoch else { return }

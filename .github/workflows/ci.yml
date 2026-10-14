@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Lint
+        run: make lint
+      - name: Unit tests
+        run: swift test
+      - name: Build the app bundle
+        run: make app
+      - name: Check the Ghostty script
+        run: |
+          bash -n Resources/ghostty-grok
+          Resources/ghostty-grok --dry-run --cwd /tmp --prompt "hello"

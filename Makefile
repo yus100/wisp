@@ -1,41 +1,60 @@
 APP_NAME := Wisp
 BUNDLE_ID := com.yus100.wisp
-BUILD_DIR := .build/release
 APP := build/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications
+SOURCES := Sources Tests Package.swift scripts/make-icon.swift
 
-.PHONY: all build app install run stop clean
+.PHONY: help build app install uninstall run stop test lint format icon smoke clean
 
-all: app
+help: ## List the targets
+	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
 
-build:
+build: ## Compile a release build
 	swift build -c release
 
-app: build
+app: build ## Assemble and sign build/Wisp.app
 	rm -rf "$(APP)"
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
-	cp "$(BUILD_DIR)/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
+	cp ".build/release/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	cp Resources/ghostty-grok Resources/AppIcon.icns "$(APP)/Contents/Resources/"
 	chmod +x "$(APP)/Contents/Resources/ghostty-grok"
-	# Ad-hoc signature with a designated requirement on the bundle ID only, so macOS privacy grants
-	# (microphone, files, Ghostty automation) survive rebuilds instead of being tied to one binary hash.
+	# Ad-hoc signature whose designated requirement is the bundle ID, so macOS privacy grants
+	# (microphone, files, Automation) survive rebuilds instead of being tied to one binary hash.
 	codesign --force --sign - --identifier $(BUNDLE_ID) \
 		-r='designated => identifier "$(BUNDLE_ID)"' "$(APP)"
 	@echo "Built $(APP)"
 
-stop:
-	-@pkill -x $(APP_NAME) 2>/dev/null; sleep 0.5
-
-install: app stop
+install: app stop ## Install to ~/Applications and launch
 	mkdir -p "$(INSTALL_DIR)"
 	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
 	cp -R "$(APP)" "$(INSTALL_DIR)/"
 	open "$(INSTALL_DIR)/$(APP_NAME).app"
-	@echo "Installed to $(INSTALL_DIR)/$(APP_NAME).app"
+	@echo "Installed $(INSTALL_DIR)/$(APP_NAME).app"
 
-run: app stop
+uninstall: stop ## Quit and remove the app (keeps config, logs, and history)
+	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
+
+run: app stop ## Launch the freshly built app without installing it
 	open "$(APP)"
 
-clean:
+stop: ## Quit a running Wisp
+	-@/usr/bin/pkill -x $(APP_NAME) 2>/dev/null; sleep 0.5
+
+test: ## Run the unit tests
+	swift test
+
+lint: ## Check formatting
+	swift format lint --strict --recursive $(SOURCES)
+
+format: ## Format the sources in place
+	swift format --in-place --recursive $(SOURCES)
+
+icon: ## Redraw Resources/AppIcon.icns
+	swift scripts/make-icon.swift
+
+smoke: ## End-to-end check against the installed app (needs "remoteControl": true)
+	scripts/smoke-test.sh
+
+clean: ## Remove build products
 	rm -rf .build build

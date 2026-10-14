@@ -45,7 +45,10 @@ func drawIcon(in context: CGContext) {
     // Tail: soft glows laid along a curve, shrinking and fading toward the tip, like a comet's trail.
     func point(_ t: CGFloat, _ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint, _ p3: CGPoint) -> CGPoint {
         let u = 1 - t
-        let a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
+        let a = u * u * u
+        let b = 3 * u * u * t
+        let c = 3 * u * t * t
+        let d = t * t * t
         return CGPoint(x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y)
     }
     let trails: [(curve: [CGPoint], width: CGFloat, strength: CGFloat)] = [

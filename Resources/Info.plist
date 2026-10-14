@@ -6,6 +6,8 @@
 	<string>Wisp</string>
 	<key>CFBundleExecutable</key>
 	<string>Wisp</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.yus100.wisp</string>
 	<key>CFBundleName</key>

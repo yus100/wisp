@@ -16,7 +16,7 @@ app: build
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
-	cp Resources/ghostty-grok "$(APP)/Contents/Resources/ghostty-grok"
+	cp Resources/ghostty-grok Resources/AppIcon.icns "$(APP)/Contents/Resources/"
 	chmod +x "$(APP)/Contents/Resources/ghostty-grok"
 	# Ad-hoc signature with a designated requirement on the bundle ID only, so macOS privacy grants
 	# (microphone, files, Ghostty automation) survive rebuilds instead of being tied to one binary hash.

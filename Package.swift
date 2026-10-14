@@ -19,6 +19,10 @@ let package = Package(
                 .linkedFramework("ServiceManagement"),
             ]
         ),
-        .testTarget(name: "WispCoreTests", dependencies: ["WispCore"]),
+        .testTarget(
+            name: "WispCoreTests",
+            dependencies: ["WispCore"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )

@@ -132,9 +132,10 @@ final class ControlServer {
                 model.startVoice(.handsFree)
             }
         case "voice-file":
-            guard let file = exchangeFile(argument) else { return }
+            guard let file = exchangeFile(argument), let recording = try? Data(contentsOf: file) else { return }
+            try? FileManager.default.removeItem(at: file)
             panel.show()
-            model.startVoice(.handsFree, file: file)
+            model.startVoice(.handsFree, recording: recording)
         case "new": model.newConversation()
         case "ghostty": model.continueInGhostty()
         case "model": model.selectModel(argument)

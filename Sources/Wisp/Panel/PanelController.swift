@@ -82,6 +82,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     func show() {
         model.panelWillShow()
         if !panel.isVisible {
+            // Size for the content as it is now (an idle reset may just have cleared it), not as it was.
+            let fitting = hostingView.fittingSize.height
+            if fitting > 0 { measuredHeight = fitting }
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
             if let frame = screen?.visibleFrame {
                 layout.maxConversationHeight = max(200, frame.height * 0.62 - 120)

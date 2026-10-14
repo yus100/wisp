@@ -7,7 +7,7 @@ public struct TimedOut: LocalizedError, Equatable, Sendable {
 }
 
 /// Runs `operation`, failing with `TimedOut` if it takes longer than `limit`. Cancels the operation on timeout.
-func withDeadline<T: Sendable>(
+public func withDeadline<T: Sendable>(
     _ limit: Duration, _ what: String, operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in

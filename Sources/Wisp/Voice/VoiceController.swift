@@ -51,18 +51,18 @@ final class VoiceController: ObservableObject {
     private var silenceTask: Task<Void, Never>?
     private var noSpeechTask: Task<Void, Never>?
 
-    /// Starts listening. `file` streams a recording instead of the microphone and sends when it ends.
-    func start(_ mode: Mode, file: URL? = nil) {
+    /// Starts listening. `recording` (WAV bytes) plays instead of the microphone and sends when it ends.
+    func start(_ mode: Mode, recording: Data? = nil) {
         guard state == .idle else { return }
         let id = UUID()
         generation = id
         self.mode = mode
         state = .starting
         transcript = TranscriptAssembler()
-        sendWhenDone = file != nil
+        sendWhenDone = recording != nil
         stopRequested = false
         heardSpeech = false
-        task = Task { await run(id, file: file) }
+        task = Task { await run(id, recording: recording) }
     }
 
     /// Stops listening; the transcript is delivered (and sent, if `send`) once the server finalizes it.
@@ -87,9 +87,9 @@ final class VoiceController: ObservableObject {
 
     // MARK: Private
 
-    private func run(_ id: UUID, file: URL?) async {
+    private func run(_ id: UUID, recording: Data?) async {
         do {
-            let audio = try await openAudio(id, file: file)
+            let audio = try await openAudio(id, recording: recording)
             guard let audio, generation == id else { return complete(id, error: nil) }
             state = stopRequested ? .finishing : .listening
             armNoSpeechWatchdog(id)
@@ -113,9 +113,9 @@ final class VoiceController: ObservableObject {
     }
 
     /// The audio source, or nil when the user stopped before the microphone ever opened.
-    private func openAudio(_ id: UUID, file: URL?) async throws -> AsyncStream<Data>? {
-        if let file {
-            return RecordedAudio.stream(try RecordedAudio.pcm16(fromWAV: Data(contentsOf: file)))
+    private func openAudio(_ id: UUID, recording: Data?) async throws -> AsyncStream<Data>? {
+        if let recording {
+            return RecordedAudio.stream(try RecordedAudio.pcm16(fromWAV: recording))
         }
         if MicrophoneCapture.accessUndecided {
             onNotice?("Allow microphone access in the macOS prompt to use voice.")

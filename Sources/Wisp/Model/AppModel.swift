@@ -70,7 +70,10 @@ final class AppModel: ObservableObject {
     }
 
     func configDidChange(from old: WispConfig, to new: WispConfig) {
-        host.apply(new)
+        if host.apply(new), sessionID != nil {
+            // The restarted agent has none of the old sessions loaded; the old one stays in Open Recent.
+            newConversation()
+        }
         voice.language = new.voiceLanguage
         voice.silenceSeconds = new.voiceSilenceSeconds
         if old.model != new.model || old.reasoningEffort != new.reasoningEffort {
@@ -283,9 +286,9 @@ final class AppModel: ObservableObject {
         Task {
             defer { isHandingOff = false }
             let agent = try? await host.running()
-            if isWorking, let agent {
+            if isWorking, let agent, let promptTask {
                 await agent.cancel(session)
-                await promptTask?.value
+                _ = try? await withDeadline(.seconds(5), "the answer to stop") { await promptTask.value }
             }
             // Unload here first so the TUI is the only process writing the session.
             await agent?.close(session)
@@ -299,6 +302,7 @@ final class AppModel: ObservableObject {
             } catch {
                 try? await agent?.load(session, in: host.workingDirectory)
                 show(error)
+                focusRequest += 1
             }
         }
     }
@@ -343,11 +347,12 @@ final class AppModel: ObservableObject {
 
     // MARK: Voice
 
-    func startVoice(_ mode: VoiceController.Mode, file: URL? = nil) {
+    /// Starts dictation; `recording` (16 kHz mono 16-bit WAV bytes) stands in for the microphone.
+    func startVoice(_ mode: VoiceController.Mode, recording: Data? = nil) {
         guard !voice.isActive, !isHandingOff else { return }
         notice = nil
         voiceBaseText = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        voice.start(mode, file: file)
+        voice.start(mode, recording: recording)
     }
 
     private func configureVoice() {

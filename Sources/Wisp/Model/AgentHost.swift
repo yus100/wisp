@@ -18,6 +18,10 @@ final class AgentHost {
     private var resolvedEnvironment: [String: String]?
     private var agent: GrokAgent?
     private var starting: Task<GrokAgent, Error>?
+    /// The agent between spawn and handshake, so a restart can stop it too.
+    private var launching: GrokAgent?
+    /// Bumped by every restart, so a start that was superseded is discarded.
+    private var generation = 0
 
     init(config: WispConfig, paths: WispPaths) {
         self.config = config
@@ -26,14 +30,17 @@ final class AgentHost {
 
     var workingDirectory: String { paths.expand(config.workingDirectory) }
 
-    /// Picks up settings that affect the agent process; restarts it when they changed.
-    func apply(_ config: WispConfig) {
+    /// Picks up settings that affect the agent process. Returns true when that meant restarting it,
+    /// which unloads every session.
+    @discardableResult
+    func apply(_ config: WispConfig) -> Bool {
         let restart =
             config.workingDirectory != self.config.workingDirectory
             || config.grokPath != self.config.grokPath
             || config.ghosttyTarget != self.config.ghosttyTarget
         self.config = config
         if restart { self.restart() }
+        return restart
     }
 
     // MARK: Environment
@@ -75,10 +82,15 @@ final class AgentHost {
     func running() async throws -> GrokAgent {
         if let agent, agent.isRunning { return agent }
         if let starting { return try await starting.value }
+        let generation = generation
         let task = Task { try await launch() }
         starting = task
-        defer { starting = nil }
+        defer { if self.generation == generation { starting = nil } }
         let started = try await task.value
+        guard self.generation == generation else {
+            started.stop()
+            throw CancellationError()
+        }
         agent = started
         return started
     }
@@ -96,6 +108,8 @@ final class AgentHost {
                 environment: agentEnvironment(base),
                 workingDirectory: URL(filePath: workingDirectory),
                 clientVersion: version))
+        launching = agent
+        defer { if launching === agent { launching = nil } }
         agent.onSessionUpdate = { [weak self] in self?.onSessionUpdate?($0) }
         agent.onUnexpectedExit = { [weak self, weak agent] status in
             guard let self, let agent, agent === self.agent else { return }
@@ -108,14 +122,14 @@ final class AgentHost {
     }
 
     func restart() {
-        starting?.cancel()
-        agent?.stop()
-        agent = nil
+        shutdown()
         Task { _ = try? await running() }
     }
 
     func shutdown() {
-        starting?.cancel()
+        generation += 1
+        starting = nil
+        launching?.stop()
         agent?.stop()
         agent = nil
     }

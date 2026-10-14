@@ -54,10 +54,12 @@ final class MicrophoneCapture: @unchecked Sendable {
 
     /// Stops capturing and ends the stream. Safe to call more than once.
     func stop() {
-        guard let sink = lock.withLock({ () -> AsyncStream<Data>.Continuation? in
-            defer { self.sink = nil }
-            return self.sink
-        }) else { return }
+        guard
+            let sink = lock.withLock({ () -> AsyncStream<Data>.Continuation? in
+                defer { self.sink = nil }
+                return self.sink
+            })
+        else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         sink.finish()
@@ -77,7 +79,7 @@ private final class PCMConverter: @unchecked Sendable {
 
     init?(from input: AVAudioFormat, sampleRate: Double) {
         guard let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true),
-              let converter = AVAudioConverter(from: input, to: format)
+            let converter = AVAudioConverter(from: input, to: format)
         else { return nil }
         converter.downmix = true
         self.converter = converter
@@ -114,7 +116,9 @@ private final class LevelMeter: @unchecked Sendable {
 
     func measure(_ buffer: AVAudioPCMBuffer) {
         let now = Date()
-        guard now.timeIntervalSince(lastReport) >= 0.05, let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
+        guard now.timeIntervalSince(lastReport) >= 0.05, let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else {
+            return
+        }
         lastReport = now
         var sum: Float = 0
         for index in 0..<Int(buffer.frameLength) { sum += samples[index] * samples[index] }

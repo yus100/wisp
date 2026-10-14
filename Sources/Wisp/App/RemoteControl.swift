@@ -191,7 +191,9 @@ final class ControlServer {
             case .running: state = "running"
             case .finished: state = "finished"
             case .cancelled: state = "cancelled"
-            case .failed(let message): state = "failed"; error = message
+            case .failed(let message):
+                state = "failed"
+                error = message
             }
             return [
                 "query": turn.query, "answer": turn.answer, "state": state, "error": error,

@@ -10,7 +10,8 @@ import Testing
         .appending(path: "Resources/ghostty-grok")
 
     func launcher(_ environment: [String: String] = [:]) -> GhosttyLauncher {
-        GhosttyLauncher(script: Self.script, environment: ["HOME": NSHomeDirectory(), "PATH": "/usr/bin:/bin"].merging(environment) { $1 })
+        GhosttyLauncher(
+            script: Self.script, environment: ["HOME": NSHomeDirectory(), "PATH": "/usr/bin:/bin"].merging(environment) { $1 })
     }
 
     @Test func resumeTypesTheSessionID() async throws {
@@ -21,7 +22,8 @@ import Testing
 
     @Test func promptsTravelInTheEnvironmentAfterADoubleDash() async throws {
         let prompt = "-starts with a dash\nand has \"quotes\", $HOME, and `ticks`"
-        let output = try await launcher(["WISP_GROK": "/opt/my grok/grok"]).describe(.init(directory: "/tmp", prompt: prompt, target: .window))
+        let output = try await launcher(["WISP_GROK": "/opt/my grok/grok"]).describe(
+            .init(directory: "/tmp", prompt: prompt, target: .window))
         #expect(output.contains(#"command: /opt/my\ grok/grok -- "$WISP_PROMPT""#))
         #expect(output.contains("WISP_PROMPT: \(prompt)"))
         #expect(output.contains("target: window"))
@@ -41,14 +43,16 @@ import Testing
         #expect(rules.contains("'\(Self.script.path)' --cwd <project dir> --prompt \"$(cat <<'BRIEF'"))
         let brief = "Fix `make test` and $(whoami)'s \"quoted\" bug\nsecond line"
         let command = "'\(Self.script.path)' --dry-run --cwd /tmp --prompt \"$(cat <<'BRIEF'\n\(brief)\nBRIEF\n)\""
-        let result = try await ProcessRunner.run(URL(filePath: "/bin/zsh"), arguments: ["-c", command], environment: ["HOME": NSHomeDirectory()])
+        let result = try await ProcessRunner.run(
+            URL(filePath: "/bin/zsh"), arguments: ["-c", command], environment: ["HOME": NSHomeDirectory()])
         #expect(String(decoding: result.stdout, as: UTF8.self).contains("WISP_PROMPT: \(brief)\n"))
     }
 
     @Test func defaultsComeFromTheEnvironment() async throws {
         let output = try await launcher(["WISP_GHOSTTY_TARGET": "tab"]).describe(.init(directory: "~", target: .window))
         #expect(output.contains("target: window"), "an explicit --window beats the environment default")
-        let script = try await ProcessRunner.run(Self.script, arguments: ["--dry-run"], environment: ["HOME": "/tmp", "WISP_GHOSTTY_TARGET": "tab"])
+        let script = try await ProcessRunner.run(
+            Self.script, arguments: ["--dry-run"], environment: ["HOME": "/tmp", "WISP_GHOSTTY_TARGET": "tab"])
         #expect(String(decoding: script.stdout, as: UTF8.self).contains("target: tab"))
     }
 }

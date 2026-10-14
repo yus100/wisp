@@ -42,7 +42,7 @@ public struct SessionHistory: Sendable {
         for index in entries.indices {
             let entry = entries[index]
             guard let title = GrokSessionStore(grokHome: grokHome).title(of: entry.id, directory: entry.directory),
-                  title != entry.title
+                title != entry.title
             else { continue }
             entries[index].title = title
             changed = true
@@ -82,12 +82,16 @@ public struct GrokSessionStore: Sendable {
     /// The generated (or manually set) title from the session's `summary.json`.
     public func title(of sessionID: String, directory: String) -> String? {
         struct Summary: Decodable {
-            let generated_title: String?
+            let generatedTitle: String?
+
+            enum CodingKeys: String, CodingKey {
+                case generatedTitle = "generated_title"
+            }
         }
         guard let folder = folder(of: sessionID, directory: directory),
-              let data = try? Data(contentsOf: folder.appending(path: "summary.json")),
-              let title = try? JSONDecoder().decode(Summary.self, from: data).generated_title,
-              !title.isEmpty
+            let data = try? Data(contentsOf: folder.appending(path: "summary.json")),
+            let title = try? JSONDecoder().decode(Summary.self, from: data).generatedTitle,
+            !title.isEmpty
         else { return nil }
         return title
     }

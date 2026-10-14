@@ -57,7 +57,8 @@ public enum ShellEnvironment {
             environment.removeValue(forKey: key)
         }
         var path = (environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
-        for fallback in ["\(home)/.grok/bin", "\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"] where !path.contains(fallback) {
+        for fallback in ["\(home)/.grok/bin", "\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+        where !path.contains(fallback) {
             path.append(fallback)
         }
         environment["PATH"] = path.joined(separator: ":")

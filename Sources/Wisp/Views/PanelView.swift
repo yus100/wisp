@@ -22,12 +22,14 @@ struct PanelView: View {
         }
         .frame(width: PanelController.width)
         .fixedSize(horizontal: false, vertical: true)
-        .background(GeometryReader { proxy in
-            // Preferences do not reliably propagate here, so report the height directly.
-            Color.clear
-                .onAppear { onHeightChange(proxy.size.height) }
-                .onChange(of: proxy.size.height) { onHeightChange(proxy.size.height) }
-        })
+        .background(
+            GeometryReader { proxy in
+                // Preferences do not reliably propagate here, so report the height directly.
+                Color.clear
+                    .onAppear { onHeightChange(proxy.size.height) }
+                    .onChange(of: proxy.size.height) { onHeightChange(proxy.size.height) }
+            }
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

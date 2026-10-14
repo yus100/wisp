@@ -53,7 +53,9 @@ public actor ACPConnection {
     }
 
     public func notify<Params: Encodable & Sendable>(_ method: String, params: Params) {
-        guard closedError == nil, let message = try? encoder.encode(OutgoingNotification(method: method, params: params)) else { return }
+        guard closedError == nil, let message = try? encoder.encode(OutgoingNotification(method: method, params: params)) else {
+            return
+        }
         try? send(message + Data([0x0A]))
     }
 

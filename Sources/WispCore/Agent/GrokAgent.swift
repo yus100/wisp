@@ -144,7 +144,8 @@ public final class GrokAgent {
     /// Unloads a session from this agent. It stays on disk, so `grok --resume` can pick it up.
     public func close(_ sessionID: String) async {
         do {
-            _ = try await requireConnection().request("session/close", params: SessionParams(sessionId: sessionID), as: EmptyResult.self)
+            _ = try await requireConnection().request(
+                "session/close", params: SessionParams(sessionId: sessionID), as: EmptyResult.self)
         } catch {
             Log.info("session/close \(sessionID): \(error.localizedDescription)")
         }
@@ -170,7 +171,9 @@ public final class GrokAgent {
         let decoder = JSONDecoder()
         switch message {
         case .notification(let method, let data) where method == "session/update" || method == "_x.ai/session_notification":
-            guard let notification = try? decoder.decode(IncomingParams<SessionNotification>.self, from: data).params else { return }
+            guard let notification = try? decoder.decode(IncomingParams<SessionNotification>.self, from: data).params else {
+                return
+            }
             onSessionUpdate?(notification)
         case .notification:
             break
@@ -179,7 +182,8 @@ public final class GrokAgent {
             // hanging without saving an "always allow" rule into the user's own grok settings.
             let options = (try? decoder.decode(IncomingParams<PermissionRequest>.self, from: data).params.options) ?? []
             let choice = options.first { $0.kind == "allow_once" } ?? options.first { $0.kind?.hasPrefix("allow") == true }
-            let outcome = choice.map { PermissionResponse.Outcome(outcome: "selected", optionId: $0.optionId) }
+            let outcome =
+                choice.map { PermissionResponse.Outcome(outcome: "selected", optionId: $0.optionId) }
                 ?? PermissionResponse.Outcome(outcome: "cancelled", optionId: nil)
             await connection.respond(to: id, result: PermissionResponse(outcome: outcome))
         case .request(let id, let method, _):

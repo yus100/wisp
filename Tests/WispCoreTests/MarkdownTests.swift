@@ -4,7 +4,8 @@ import Testing
 
 @Suite struct MarkdownTests {
     @Test func paragraphsHeadingsAndLists() {
-        let blocks = MarkdownBlock.parse("""
+        let blocks = MarkdownBlock.parse(
+            """
             # Title
             First line
             second line
@@ -15,19 +16,21 @@ import Testing
             > quoted
             ---
             """)
-        #expect(blocks == [
-            .heading("Title"),
-            .paragraph("First line\nsecond line"),
-            .listItem("one", marker: "•", depth: 0),
-            .listItem("nested", marker: "•", depth: 1),
-            .listItem("two", marker: "2.", depth: 0),
-            .quote("quoted"),
-            .rule,
-        ])
+        #expect(
+            blocks == [
+                .heading("Title"),
+                .paragraph("First line\nsecond line"),
+                .listItem("one", marker: "•", depth: 0),
+                .listItem("nested", marker: "•", depth: 1),
+                .listItem("two", marker: "2.", depth: 0),
+                .quote("quoted"),
+                .rule,
+            ])
     }
 
     @Test func tablesDropTheSeparatorRow() {
-        let blocks = MarkdownBlock.parse("""
+        let blocks = MarkdownBlock.parse(
+            """
             | Name | Size |
             |---|:--:|
             | a | 1 |
@@ -36,7 +39,8 @@ import Testing
     }
 
     @Test func codeFencesKeepContentVerbatim() {
-        let blocks = MarkdownBlock.parse("""
+        let blocks = MarkdownBlock.parse(
+            """
             Before
             ```swift
             let x = 1

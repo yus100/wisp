@@ -87,7 +87,8 @@ final class PanelController: NSObject, NSWindowDelegate {
                 layout.maxConversationHeight = max(200, frame.height * 0.62 - 120)
                 topEdge = frame.maxY - frame.height * 0.2
                 panel.setFrame(
-                    NSRect(x: frame.midX - Self.width / 2, y: topEdge - measuredHeight, width: Self.width, height: measuredHeight),
+                    NSRect(
+                        x: frame.midX - Self.width / 2, y: topEdge - measuredHeight, width: Self.width, height: measuredHeight),
                     display: false)
             }
         }
@@ -194,7 +195,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         case ".": model.cancel()
         case "w": hide()
         case "m": DispatchQueue.main.async { self.showModelMenu() }  // the menu runs its own event loop
-        case ",": NSWorkspace.shared.open(WispPaths.standard.configFile); hide()
+        case ",":
+            NSWorkspace.shared.open(WispPaths.standard.configFile)
+            hide()
         case "c" where flags.contains(.shift): model.copyLastAnswer()
         default: return false
         }

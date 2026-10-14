@@ -19,12 +19,13 @@ struct ConversationView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
                 .padding(.bottom, 8)
-                .background(GeometryReader { geometry in
-                    // Preferences do not reliably escape a ScrollView, so write the height directly.
-                    Color.clear
-                        .onAppear { contentHeight = geometry.size.height }
-                        .onChange(of: geometry.size.height) { contentHeight = geometry.size.height }
-                })
+                .background(
+                    GeometryReader { geometry in
+                        // Preferences do not reliably escape a ScrollView, so write the height directly.
+                        Color.clear
+                            .onAppear { contentHeight = geometry.size.height }
+                            .onChange(of: geometry.size.height) { contentHeight = geometry.size.height }
+                    })
             }
             .frame(height: min(max(contentHeight, 40), maxHeight))
             .onChange(of: conversation.turns.last?.answer) { proxy.scrollTo(Self.bottom, anchor: .bottom) }

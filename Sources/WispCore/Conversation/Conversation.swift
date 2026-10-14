@@ -76,7 +76,9 @@ public struct Conversation: Equatable, Sendable {
             case .toolCallUpdate(let update):
                 guard let index = turn.steps.firstIndex(where: { $0.id == update.id }) else { return }
                 if update.status != nil { turn.steps[index].status = Self.status(update.status) }
-                if let title = update.title, Self.isDescriptive(title) { turn.steps[index].title = Self.tidy(title, paths: paths) }
+                if let title = update.title, Self.isDescriptive(title) {
+                    turn.steps[index].title = Self.tidy(title, paths: paths)
+                }
             case .retry(.retrying(let attempt, let maxRetries)):
                 turn.notice = "Grok is busy, retrying" + (maxRetries.map { " (\(attempt) of \($0))" } ?? "") + "…"
             case .retry(.exhausted(let reason)):

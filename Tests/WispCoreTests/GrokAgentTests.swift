@@ -12,16 +12,18 @@ import Testing
     }
 
     func startAgent() async throws -> (GrokAgent, Recorder) {
-        let source = try #require(Bundle.module.url(forResource: "fake-grok-agent", withExtension: "py", subdirectory: "Fixtures"))
+        let source = try #require(
+            Bundle.module.url(forResource: "fake-grok-agent", withExtension: "py", subdirectory: "Fixtures"))
         let executable = FileManager.default.temporaryDirectory.appending(path: "fake-grok-\(UUID().uuidString).py")
         try FileManager.default.copyItem(at: source, to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
-        let agent = GrokAgent(launch: .init(
-            executable: executable,
-            environment: ProcessInfo.processInfo.environment,
-            workingDirectory: FileManager.default.temporaryDirectory,
-            clientVersion: "test"))
+        let agent = GrokAgent(
+            launch: .init(
+                executable: executable,
+                environment: ProcessInfo.processInfo.environment,
+                workingDirectory: FileManager.default.temporaryDirectory,
+                clientVersion: "test"))
         let recorder = Recorder()
         agent.onSessionUpdate = { recorder.updates.append($0.update) }
         agent.onUnexpectedExit = { recorder.exits.append($0) }
@@ -46,13 +48,15 @@ import Testing
         let result = try await agent.prompt("hello", in: session.sessionId)
         #expect(result.stopReason == "end_turn")
         #expect(result.modelID == "grok-test")
-        #expect(recorder.updates == [
-            .messageChunk("Hello "),
-            .toolCall(ToolCall(id: "t1", title: "run_terminal_command", status: "pending", input: ToolInput(command: "ls ~"))),
-            .toolCallUpdate(ToolCallUpdate(id: "t1", title: nil, status: "completed")),
-            .other("plan"),
-            .messageChunk("world"),
-        ])
+        #expect(
+            recorder.updates == [
+                .messageChunk("Hello "),
+                .toolCall(
+                    ToolCall(id: "t1", title: "run_terminal_command", status: "pending", input: ToolInput(command: "ls ~"))),
+                .toolCallUpdate(ToolCallUpdate(id: "t1", title: nil, status: "completed")),
+                .other("plan"),
+                .messageChunk("world"),
+            ])
     }
 
     @Test func approvesPermissionRequestsAndDeclinesUnsupportedOnes() async throws {
@@ -102,10 +106,11 @@ import Testing
 }
 
 @Suite struct ModelCatalogTests {
-    let catalog = ModelCatalog(models: [
-        .init(id: "grok", name: "Grok", efforts: ["xhigh", "high", "medium"], defaultEffort: "high"),
-        .init(id: "claude", name: "Claude", efforts: [], defaultEffort: "high"),
-    ], defaultModelID: "grok")
+    let catalog = ModelCatalog(
+        models: [
+            .init(id: "grok", name: "Grok", efforts: ["xhigh", "high", "medium"], defaultEffort: "high"),
+            .init(id: "claude", name: "Claude", efforts: [], defaultEffort: "high"),
+        ], defaultModelID: "grok")
 
     @Test func effortsFallBackUntilASessionReportsThem() {
         var catalog = catalog

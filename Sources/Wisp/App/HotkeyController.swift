@@ -37,7 +37,8 @@ final class HotkeyController {
         if !register(voiceKey, handler: { [weak self] pressed in if pressed { self?.onVoiceKey?() } }) { failed.append(voiceKey) }
         guard !failed.isEmpty else { return nil }
         Log.info("hotkeys: could not register \(failed)")
-        return "Could not register \(failed.joined(separator: " or ")). The format may be wrong or another app may own it; change it in the config (⌘,)."
+        return
+            "Could not register \(failed.joined(separator: " or ")). The format may be wrong or another app may own it; change it in the config (⌘,)."
     }
 
     private func mainKey(pressed: Bool) {
@@ -93,23 +94,25 @@ final class HotkeyController {
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased)),
         ]
         let context = Unmanaged.passUnretained(self).toOpaque()
-        InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
-            guard let event, let context else { return OSStatus(eventNotHandledErr) }
-            var hotKeyID = EventHotKeyID()
-            let status = GetEventParameter(
-                event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
-                nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
-            guard status == noErr else { return status }
-            let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
-            let id = hotKeyID.id
-            // Carbon delivers hotkey events on the main thread.
-            return MainActor.assumeIsolated {
-                let controller = Unmanaged<HotkeyController>.fromOpaque(context).takeUnretainedValue()
-                guard let handler = controller.handlers[id] else { return OSStatus(eventNotHandledErr) }
-                handler(pressed)
-                return noErr
-            }
-        }, events.count, &events, context, &eventHandler)
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, context in
+                guard let event, let context else { return OSStatus(eventNotHandledErr) }
+                var hotKeyID = EventHotKeyID()
+                let status = GetEventParameter(
+                    event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                    nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+                guard status == noErr else { return status }
+                let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
+                let id = hotKeyID.id
+                // Carbon delivers hotkey events on the main thread.
+                return MainActor.assumeIsolated {
+                    let controller = Unmanaged<HotkeyController>.fromOpaque(context).takeUnretainedValue()
+                    guard let handler = controller.handlers[id] else { return OSStatus(eventNotHandledErr) }
+                    handler(pressed)
+                    return noErr
+                }
+            }, events.count, &events, context, &eventHandler)
     }
 
     private static func carbonModifiers(_ modifiers: HotkeySpec.Modifiers) -> UInt32 {

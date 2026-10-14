@@ -13,7 +13,8 @@ import Testing
         transcript.apply(.partial(text: "What is the capital of Australia?", isFinal: true, speechFinal: false))
         transcript.apply(.partial(text: "And how far", isFinal: false, speechFinal: false))
         #expect(transcript.text == "What is the capital of Australia? And how far")
-        let finished = transcript.apply(.partial(text: "What is the capital of Australia? And how far is it?", isFinal: true, speechFinal: true))
+        let finished = transcript.apply(
+            .partial(text: "What is the capital of Australia? And how far is it?", isFinal: true, speechFinal: true))
         #expect(finished)
         #expect(transcript.committed == "What is the capital of Australia? And how far is it?")
         #expect(transcript.preview.isEmpty)
@@ -50,11 +51,14 @@ import Testing
 @Suite struct SpeechEventTests {
     @Test func parsesServerEvents() throws {
         #expect(try SpeechToText.parse(#"{"type":"transcript.created","id":"x"}"#) == .ready)
-        #expect(try SpeechToText.parse(#"{"type":"transcript.partial","text":"hi","words":[],"is_final":true,"speech_final":false}"#)
-            == .partial(text: "hi", isFinal: true, speechFinal: false))
+        #expect(
+            try SpeechToText.parse(#"{"type":"transcript.partial","text":"hi","words":[],"is_final":true,"speech_final":false}"#)
+                == .partial(text: "hi", isFinal: true, speechFinal: false))
         #expect(try SpeechToText.parse(#"{"type":"transcript.done","text":"","duration":3.2}"#) == .done(text: ""))
         #expect(try SpeechToText.parse(#"{"type":"something.new"}"#) == nil)
-        #expect(throws: SpeechToText.Failure.server("bad audio")) { try SpeechToText.parse(#"{"type":"error","message":"bad audio"}"#) }
+        #expect(throws: SpeechToText.Failure.server("bad audio")) {
+            try SpeechToText.parse(#"{"type":"error","message":"bad audio"}"#)
+        }
     }
 
     @Test func urlCarriesTheStreamSettings() {
@@ -124,8 +128,13 @@ import Testing
         func append<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
         append(UInt32(36 + samples.count * 2))
         data.append(Data("WAVEfmt ".utf8))
-        append(UInt32(16)); append(UInt16(1)); append(channels); append(rate)
-        append(rate * 2); append(UInt16(2)); append(UInt16(16))
+        append(UInt32(16))
+        append(UInt16(1))
+        append(channels)
+        append(rate)
+        append(rate * 2)
+        append(UInt16(2))
+        append(UInt16(16))
         data.append(Data("data".utf8))
         append(UInt32(samples.count * 2))
         for sample in samples { append(sample) }
@@ -165,7 +174,9 @@ import Testing
     }
 
     @Test func picksTheLatestTokenOutsideTheMargin() {
-        let data = authJSON([(key: "old", expires: now.addingTimeInterval(30)), (key: "new", expires: now.addingTimeInterval(600))])
+        let data = authJSON([
+            (key: "old", expires: now.addingTimeInterval(30)), (key: "new", expires: now.addingTimeInterval(600)),
+        ])
         #expect(GrokCredentials.freshToken(inAuthJSON: data, now: now, margin: 60) == "new")
     }
 
@@ -181,7 +192,8 @@ import Testing
     }
 
     @Test func apiKeyWins() async throws {
-        let bearer = try await GrokCredentials.bearer(environment: ["XAI_API_KEY": " xai-123 \n"], grokHome: URL(filePath: "/nonexistent"), grok: nil)
+        let bearer = try await GrokCredentials.bearer(
+            environment: ["XAI_API_KEY": " xai-123 \n"], grokHome: URL(filePath: "/nonexistent"), grok: nil)
         #expect(bearer == "xai-123")
     }
 }

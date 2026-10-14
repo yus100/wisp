@@ -28,7 +28,8 @@ final class AgentHost {
 
     /// Picks up settings that affect the agent process; restarts it when they changed.
     func apply(_ config: WispConfig) {
-        let restart = config.workingDirectory != self.config.workingDirectory
+        let restart =
+            config.workingDirectory != self.config.workingDirectory
             || config.grokPath != self.config.grokPath
             || config.ghosttyTarget != self.config.ghosttyTarget
         self.config = config
@@ -89,11 +90,12 @@ final class AgentHost {
             throw HostError.grokNotFound(executable.path)
         }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-        let agent = GrokAgent(launch: .init(
-            executable: executable,
-            environment: agentEnvironment(base),
-            workingDirectory: URL(filePath: workingDirectory),
-            clientVersion: version))
+        let agent = GrokAgent(
+            launch: .init(
+                executable: executable,
+                environment: agentEnvironment(base),
+                workingDirectory: URL(filePath: workingDirectory),
+                clientVersion: version))
         agent.onSessionUpdate = { [weak self] in self?.onSessionUpdate?($0) }
         agent.onUnexpectedExit = { [weak self, weak agent] status in
             guard let self, let agent, agent === self.agent else { return }

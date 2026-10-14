@@ -21,10 +21,11 @@ extension PanelController {
 
     /// Delivers a key press through the normal event path: the panel's key monitor, then the text field.
     func simulateKey(code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = []) {
-        guard let event = NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: modifiers,
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
-            characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)
+        guard
+            let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: modifiers,
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
+                characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)
         else { return }
         NSApp.postEvent(event, atStart: false)
     }

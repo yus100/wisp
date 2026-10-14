@@ -80,13 +80,15 @@ final class AppModel: ObservableObject {
 
     func panelWillShow() {
         if config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive, !isHandingOff,
-           Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60 {
+            Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
+        {
             newConversation()
         }
         focusRequest += 1
         Task {
             let environment = await host.environment()
-            GrokCredentials.prefetch(environment: environment, grokHome: host.grokHome, grok: host.grokExecutable(in: environment))
+            GrokCredentials.prefetch(
+                environment: environment, grokHome: host.grokHome, grok: host.grokExecutable(in: environment))
             _ = try? await host.running()
         }
     }
@@ -242,7 +244,9 @@ final class AppModel: ObservableObject {
                 try await agent.setOption(option, to: value, in: session)
             } catch {
                 Log.info("could not set \(option)=\(value): \(error.localizedDescription)")
-                if option == "model" { notice = Notice("Could not switch to \(catalog.name(of: value)): \(error.localizedDescription)") }
+                if option == "model" {
+                    notice = Notice("Could not switch to \(catalog.name(of: value)): \(error.localizedDescription)")
+                }
             }
         }
         host.refreshCatalog()

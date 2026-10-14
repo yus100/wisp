@@ -146,16 +146,23 @@ public enum SpeechToText {
         struct Message: Decodable {
             let type: String
             let text: String?
-            let is_final: Bool?
-            let speech_final: Bool?
+            let isFinal: Bool?
+            let speechFinal: Bool?
             let message: String?
+
+            enum CodingKeys: String, CodingKey {
+                case type, text, message
+                case isFinal = "is_final"
+                case speechFinal = "speech_final"
+            }
         }
         guard let message = try? JSONDecoder().decode(Message.self, from: Data(text.utf8)) else { return nil }
         switch message.type {
         case "transcript.created":
             return .ready
         case "transcript.partial":
-            return .partial(text: message.text ?? "", isFinal: message.is_final ?? false, speechFinal: message.speech_final ?? false)
+            return .partial(
+                text: message.text ?? "", isFinal: message.isFinal ?? false, speechFinal: message.speechFinal ?? false)
         case "transcript.done":
             return .done(text: message.text ?? "")
         case "error":

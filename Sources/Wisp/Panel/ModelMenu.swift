@@ -27,9 +27,10 @@ enum ModelMenu {
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Reasoning effort"))
         for effort in model.catalog.efforts(for: current) {
-            menu.addItem(ActionItem(title: AppModel.effortLabel(effort), checked: effort == model.config.reasoningEffort) {
-                model.selectEffort(effort)
-            })
+            menu.addItem(
+                ActionItem(title: AppModel.effortLabel(effort), checked: effort == model.config.reasoningEffort) {
+                    model.selectEffort(effort)
+                })
         }
     }
 }

@@ -62,8 +62,8 @@ public struct ModelCatalog: Sendable, Equatable {
     /// Records the effort levels a session reported for its current model.
     public mutating func learn(from options: [ConfigOption]) {
         guard let model = options.first(where: { $0.id == "model" })?.currentValue,
-              let efforts = options.first(where: { $0.id == "reasoning_effort" })?.values,
-              !efforts.isEmpty
+            let efforts = options.first(where: { $0.id == "reasoning_effort" })?.values,
+            !efforts.isEmpty
         else { return }
         sessionEfforts[model] = efforts
     }

@@ -27,13 +27,15 @@ public struct GhosttyLauncher: Sendable {
         public var errorDescription: String? {
             switch self {
             case .notInstalled(let message), .failed(let message): message
-            case .notPermitted: "Wisp is not allowed to control Ghostty. Turn it on in System Settings › Privacy & Security › Automation."
+            case .notPermitted:
+                "Wisp is not allowed to control Ghostty. Turn it on in System Settings › Privacy & Security › Automation."
             }
         }
 
         /// Opens the settings pane that fixes this failure, when there is one.
         public var settingsURL: URL? {
-            self == .notPermitted ? URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") : nil
+            self == .notPermitted
+                ? URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") : nil
         }
     }
 
@@ -46,19 +48,23 @@ public struct GhosttyLauncher: Sendable {
     }
 
     public func open(_ request: Request) async throws {
-        let result = try await ProcessRunner.run(script, arguments: arguments(for: request), environment: environment, timeout: .seconds(30))
+        let result = try await ProcessRunner.run(
+            script, arguments: arguments(for: request), environment: environment, timeout: .seconds(30))
         guard !result.succeeded else { return }
         let message = result.stderrText.replacingOccurrences(of: "ghostty-grok: ", with: "")
         switch result.status {
         case 3: throw Failure.notInstalled(message)
         case 4: throw Failure.notPermitted
-        default: throw Failure.failed(result.timedOut ? "Ghostty did not respond." : message.isEmpty ? "Could not open Ghostty." : message)
+        default:
+            throw Failure.failed(
+                result.timedOut ? "Ghostty did not respond." : message.isEmpty ? "Could not open Ghostty." : message)
         }
     }
 
     /// What `open` would do, as reported by the script's `--dry-run`.
     func describe(_ request: Request) async throws -> String {
-        let result = try await ProcessRunner.run(script, arguments: arguments(for: request) + ["--dry-run"], environment: environment)
+        let result = try await ProcessRunner.run(
+            script, arguments: arguments(for: request) + ["--dry-run"], environment: environment)
         return String(decoding: result.stdout, as: UTF8.self) + result.stderrText
     }
 

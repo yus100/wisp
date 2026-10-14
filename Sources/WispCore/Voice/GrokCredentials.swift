@@ -31,7 +31,7 @@ public enum GrokCredentials {
     /// Refreshes in the background when the token is close to expiry, so voice starts without waiting.
     public static func prefetch(environment: [String: String], grokHome: URL, grok: URL?) {
         guard environment["XAI_API_KEY"]?.isEmpty ?? true, let grok,
-              freshToken(in: grokHome.appending(path: "auth.json"), margin: 180) == nil
+            freshToken(in: grokHome.appending(path: "auth.json"), margin: 180) == nil
         else { return }
         Task.detached { await refresh(grok: grok, environment: environment) }
     }
@@ -45,15 +45,20 @@ public enum GrokCredentials {
     static func freshToken(inAuthJSON data: Data, now: Date, margin: TimeInterval) -> String? {
         struct Login: Decodable {
             let key: String?
-            let expires_at: String?
+            let expiresAt: String?
+
+            enum CodingKeys: String, CodingKey {
+                case key
+                case expiresAt = "expires_at"
+            }
         }
         guard let logins = try? JSONDecoder().decode([String: Login].self, from: data) else { return nil }
         let withFraction = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
         let plain = Date.ISO8601FormatStyle()
         return logins.values
             .compactMap { login -> (String, Date)? in
-                guard let key = login.key, !key.isEmpty, let text = login.expires_at,
-                      let expiry = (try? withFraction.parse(text)) ?? (try? plain.parse(text))
+                guard let key = login.key, !key.isEmpty, let text = login.expiresAt,
+                    let expiry = (try? withFraction.parse(text)) ?? (try? plain.parse(text))
                 else { return nil }
                 return (key, expiry)
             }

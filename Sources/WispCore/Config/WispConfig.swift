@@ -76,7 +76,7 @@ public struct WispConfig: Codable, Equatable, Sendable {
     private static func describe(_ error: Error) -> String {
         switch error {
         case DecodingError.typeMismatch(_, let context), DecodingError.valueNotFound(_, let context),
-             DecodingError.dataCorrupted(let context):
+            DecodingError.dataCorrupted(let context):
             let key = context.codingPath.map(\.stringValue).joined(separator: ".")
             return key.isEmpty ? "invalid JSON" : "bad value for \"\(key)\""
         default:

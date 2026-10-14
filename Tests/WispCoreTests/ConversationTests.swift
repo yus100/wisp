@@ -11,8 +11,13 @@ import Testing
         conversation.begin("how big is Documents?")
         #expect(conversation.isWorking)
         conversation.apply(.messageChunk("Let me check."))
-        conversation.apply(.toolCall(ToolCall(id: "t1", title: "run_terminal_command", status: "pending", input: ToolInput(command: "du -sh /Users/me/Documents"))))
-        conversation.apply(.toolCallUpdate(ToolCallUpdate(id: "t1", title: "Execute `du -sh /Users/me/Documents`", status: "completed")))
+        conversation.apply(
+            .toolCall(
+                ToolCall(
+                    id: "t1", title: "run_terminal_command", status: "pending",
+                    input: ToolInput(command: "du -sh /Users/me/Documents"))))
+        conversation.apply(
+            .toolCallUpdate(ToolCallUpdate(id: "t1", title: "Execute `du -sh /Users/me/Documents`", status: "completed")))
         conversation.apply(.thoughtChunk("thinking"))
         conversation.apply(.messageChunk("It is 4 GB."))
         conversation.finish(stopReason: "end_turn", model: "grok-4.7")
@@ -27,9 +32,13 @@ import Testing
 
     @Test func stepTitlesFallBackToArguments() {
         func summary(_ call: ToolCall) -> String { Conversation.summary(of: call, paths: paths) }
-        #expect(summary(ToolCall(id: "a", title: "run_terminal_command", status: nil, input: ToolInput(command: "ls\n-la"))) == "Run `ls -la`")
+        #expect(
+            summary(ToolCall(id: "a", title: "run_terminal_command", status: nil, input: ToolInput(command: "ls\n-la")))
+                == "Run `ls -la`")
         #expect(summary(ToolCall(id: "b", title: "grep", status: nil, input: ToolInput(query: "TODO"))) == "Search “TODO”")
-        #expect(summary(ToolCall(id: "c", title: "read_file", status: nil, input: ToolInput(path: "/Users/me/a.txt"))) == "Read ~/a.txt")
+        #expect(
+            summary(ToolCall(id: "c", title: "read_file", status: nil, input: ToolInput(path: "/Users/me/a.txt")))
+                == "Read ~/a.txt")
         #expect(summary(ToolCall(id: "d", title: "web_search", status: nil)) == "Web Search")
     }
 
@@ -80,7 +89,8 @@ import Testing
         let grokHome = root.appending(path: ".grok")
         let folder = grokHome.appending(path: "sessions/%2FUsers%2Fme/s1")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try Data(#"{"generated_title":"Codeword recall test","info":{"id":"s1"}}"#.utf8).write(to: folder.appending(path: "summary.json"))
+        try Data(#"{"generated_title":"Codeword recall test","info":{"id":"s1"}}"#.utf8).write(
+            to: folder.appending(path: "summary.json"))
 
         var history = SessionHistory(file: root.appending(path: "history.json"))
         history.record("s1", title: "remember the codeword", directory: "/Users/me")

@@ -5,7 +5,8 @@ import Testing
 
 @Suite struct ShellEnvironmentTests {
     @Test func parseIgnoresProfileNoiseBeforeTheMarker() {
-        let output = Data("Welcome to zsh!\n\(ShellEnvironment.marker)PATH=/opt/homebrew/bin:/usr/bin\0EDITOR=vim\0EMPTY=\0MULTI=a=b\0".utf8)
+        let output = Data(
+            "Welcome to zsh!\n\(ShellEnvironment.marker)PATH=/opt/homebrew/bin:/usr/bin\0EDITOR=vim\0EMPTY=\0MULTI=a=b\0".utf8)
         let parsed = ShellEnvironment.parse(output)
         #expect(parsed["PATH"] == "/opt/homebrew/bin:/usr/bin")
         #expect(parsed["EDITOR"] == "vim")

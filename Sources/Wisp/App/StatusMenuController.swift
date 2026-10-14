@@ -28,17 +28,20 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         let config = model.config
         menu.addItem(ActionItem(title: "Ask Grok   \(HotkeySpec.display(config.hotkey)) (hold to talk)", handler: showPanel))
         menu.addItem(ActionItem(title: "Voice   \(HotkeySpec.display(config.voiceHotkey))", handler: startVoice))
-        menu.addItem(ActionItem(title: "New Conversation") { [model, showPanel] in
-            model.newConversation()
-            showPanel()
-        })
-        menu.addItem(ActionItem(title: "Continue in Ghostty", enabled: model.sessionID != nil) { [model] in model.continueInGhostty() })
+        menu.addItem(
+            ActionItem(title: "New Conversation") { [model, showPanel] in
+                model.newConversation()
+                showPanel()
+            })
+        menu.addItem(
+            ActionItem(title: "Continue in Ghostty", enabled: model.sessionID != nil) { [model] in model.continueInGhostty() })
         menu.addItem(submenu("Open Recent in Ghostty", recentItems()))
         menu.addItem(submenu("Model", modelItems()))
 
         menu.addItem(.separator())
         menu.addItem(ActionItem(title: "Edit Config…") { NSWorkspace.shared.open(WispPaths.standard.configFile) })
-        menu.addItem(ActionItem(title: "Launch at Login", checked: SMAppService.mainApp.status == .enabled) { Self.toggleLaunchAtLogin() })
+        menu.addItem(
+            ActionItem(title: "Launch at Login", checked: SMAppService.mainApp.status == .enabled) { Self.toggleLaunchAtLogin() })
         menu.addItem(ActionItem(title: "Restart Grok Agent") { [model] in model.restartAgent() })
         menu.addItem(ActionItem(title: "Show Logs") { NSWorkspace.shared.open(WispPaths.standard.logs) })
         menu.addItem(.separator())

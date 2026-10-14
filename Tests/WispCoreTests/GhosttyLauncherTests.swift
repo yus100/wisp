@@ -35,6 +35,16 @@ import Testing
         }
     }
 
+    /// The quick-answer rules tell the agent to pass briefs through a quoted heredoc; run that exact form in zsh.
+    @Test func agentStyleHeredocBriefsReachTheScriptVerbatim() async throws {
+        let rules = QuickAnswerRules.text(workingDirectory: "/tmp", ghosttyScript: Self.script.path)
+        #expect(rules.contains("'\(Self.script.path)' --cwd <project dir> --prompt \"$(cat <<'BRIEF'"))
+        let brief = "Fix `make test` and $(whoami)'s \"quoted\" bug\nsecond line"
+        let command = "'\(Self.script.path)' --dry-run --cwd /tmp --prompt \"$(cat <<'BRIEF'\n\(brief)\nBRIEF\n)\""
+        let result = try await ProcessRunner.run(URL(filePath: "/bin/zsh"), arguments: ["-c", command], environment: ["HOME": NSHomeDirectory()])
+        #expect(String(decoding: result.stdout, as: UTF8.self).contains("WISP_PROMPT: \(brief)\n"))
+    }
+
     @Test func defaultsComeFromTheEnvironment() async throws {
         let output = try await launcher(["WISP_GHOSTTY_TARGET": "tab"]).describe(.init(directory: "~", target: .window))
         #expect(output.contains("target: window"), "an explicit --window beats the environment default")

@@ -16,10 +16,14 @@ public enum QuickAnswerRules {
             Dev sessions:
             When the user wants to build, fix, or work on code or a project ("start a dev session", "open a session in X", \
             "let's add Y to Z"), do not do the development here. Launch a full Grok Build session in Ghostty:
-              '\(ghosttyScript)' --cwd <project dir> [--prompt <task brief>]
+              '\(ghosttyScript)' --cwd <project dir> --prompt "$(cat <<'BRIEF'
+              <task brief>
+              BRIEF
+              )"
             - Find the right project directory first; search for it if unsure, and create it if the user asks for a new project.
-            - Make --prompt a self-contained brief that carries the relevant context from this conversation. Omit it when the \
-            user only wants a session open. For multi-line briefs, use --prompt "$(cat <<'EOF' ... EOF)".
+            - Make the brief self-contained: carry over the relevant context from this conversation. Always pass it through \
+            the quoted heredoc shown, so the shell expands nothing inside it. Leave out --prompt when the user only wants \
+            a session open.
             - Then reply with one short line saying where the session opened.
             """
         if !extra.isEmpty { text += "\n\n" + extra }

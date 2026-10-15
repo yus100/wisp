@@ -56,7 +56,7 @@ extension AppModel {
         guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
             let png = bitmap.representation(using: .png, properties: [:])
         else { return }
-        let file = paths.attachments.appending(path: "Pasted image \(Self.stamp()).png")
+        let file = Self.newFile(named: "Pasted image", in: paths.attachments)
         do {
             try png.write(to: file)
             attachments.append(Attachment(url: file, kind: .image))
@@ -77,14 +77,23 @@ extension AppModel {
 
     /// Captures the window of the app that was in front when the panel opened.
     func attachContextWindow() {
+        guard !isCapturingWindow else { return }
         guard let app = contextApp, !app.isTerminated else {
             notice = Notice("There's no window to attach. Open Wisp from the app you want to show it.")
             return
         }
         let directory = paths.attachments
+        let generation = attachmentGeneration
+        isCapturingWindow = true
         Task {
+            defer { isCapturingWindow = false }
             do {
                 let file = try await WindowCapture.capture(app, into: directory)
+                // Sent or started over while capturing: the screenshot belonged to that question.
+                guard generation == attachmentGeneration else {
+                    try? FileManager.default.removeItem(at: file)
+                    return
+                }
                 attachments.append(Attachment(url: file, kind: .window(app.localizedName ?? "App")))
                 notice = nil
             } catch let failure as WindowCapture.Failure {
@@ -97,23 +106,34 @@ extension AppModel {
         }
     }
 
-    /// Removes pasted images and screenshots older than a week.
+    /// Removes pasted images and screenshots older than a week, in the background. Runs at launch and
+    /// whenever the panel opens.
     func pruneOldAttachments() {
-        let fileManager = FileManager.default
-        let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
-        let files =
-            (try? fileManager.contentsOfDirectory(
-                at: paths.attachments, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        for file in files {
-            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            if let modified, modified < cutoff { try? fileManager.removeItem(at: file) }
+        let directory = paths.attachments
+        Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+            let files =
+                (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]))
+                ?? []
+            for file in files {
+                let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                if let modified, modified < cutoff { try? fileManager.removeItem(at: file) }
+            }
         }
     }
 
-    /// A filename-safe timestamp for saved images.
-    nonisolated static func stamp() -> String {
-        Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+    /// `<name> <timestamp>.png` in `directory`, numbered if two are saved within the same second.
+    nonisolated static func newFile(named name: String, in directory: URL) -> URL {
+        let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
             .replacingOccurrences(of: ":", with: ".")
+        var file = directory.appending(path: "\(name) \(stamp).png")
+        var number = 2
+        while FileManager.default.fileExists(atPath: file.path) {
+            file = directory.appending(path: "\(name) \(stamp) \(number).png")
+            number += 1
+        }
+        return file
     }
 }
 

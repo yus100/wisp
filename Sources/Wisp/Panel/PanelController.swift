@@ -31,9 +31,14 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// The height with nothing but the input row, for opening right after an idle reset.
     private var emptyHeight: CGFloat = 56
     private var pendingHeight: CGFloat?
-    /// The file picker is open; it takes focus without dismissing the panel.
-    private var isPicking = false
+    /// The open file picker; it takes focus without dismissing the panel.
+    private(set) var picker: NSOpenPanel?
+    private var pickerEndsOnDeactivate: NSObjectProtocol?
     private var mouseUpMonitor: Any?
+    /// The app most recently in front other than Wisp: what "Attach Window" captures, and where focus
+    /// goes back to when Wisp itself was active.
+    private var previousApp = NSWorkspace.shared.frontmostApplication
+    private var activationObserver: NSObjectProtocol?
 
     init(model: AppModel) {
         self.model = model
@@ -79,20 +84,26 @@ final class PanelController: NSObject, NSWindowDelegate {
         ])
         panel.contentView = effectView
         model.onRequestHide = { [weak self] in self?.hide() }
+        if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                app.bundleIdentifier != Bundle.main.bundleIdentifier
+            else { return }
+            MainActor.assumeIsolated { self?.previousApp = app }
+        }
     }
 
     var isVisible: Bool { panel.isVisible }
 
     // MARK: Show and hide
 
-    /// Opens on the screen with the mouse, a fifth of the way down.
+    /// Opens on the screen with the mouse, a fifth of the way down. When already open, takes focus.
     func show() {
-        model.panelWillShow()
         if !panel.isVisible {
-            // The panel never activates Wisp, so the frontmost app is the one the user was just in.
-            if let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier != Bundle.main.bundleIdentifier {
-                model.contextApp = front
-            }
+            model.contextApp = previousApp
+            model.panelWillOpen()
             // An idle reset may just have cleared the conversation; open at the empty height, not the old one.
             if model.conversation.isEmpty && model.notice == nil { measuredHeight = emptyHeight }
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
@@ -108,15 +119,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         stopWaitingForMouseUp()
         panel.makeKeyAndOrderFront(nil)
         installKeyMonitor()
+        model.focusInput()
     }
 
-    func hide() {
+    /// `returnFocus`: when Wisp itself is the active app (after the file picker or a notification click),
+    /// hand focus back to the previous app. Not wanted when the user is already moving to another app.
+    func hide(returnFocus: Bool = true) {
         if model.voice.isActive, model.voice.mode == .pushToTalk { model.voice.cancel() }
         panel.orderOut(nil)
         removeKeyMonitor()
         stopWaitingForMouseUp()
-        // The file picker makes Wisp the active app; give focus back to the app the user came from.
-        if NSApp.isActive, let app = model.contextApp, !app.isTerminated { app.activate() }
+        if returnFocus, NSApp.isActive, let app = previousApp, !app.isTerminated { app.activate() }
     }
 
     func toggle() {
@@ -126,9 +139,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         // Clicking anywhere else dismisses the panel, as Spotlight does. Hands-free dictation and the
         // file picker keep it open.
-        guard panel.isVisible, !isPicking, !(model.voice.isActive && model.voice.mode == .handsFree) else { return }
+        guard panel.isVisible, picker == nil, !(model.voice.isActive && model.voice.mode == .handsFree) else { return }
         // Dragging a file in from another app starts with a click there, so wait to see where it lands.
-        if NSEvent.pressedMouseButtons & 1 != 0 { hideAfterMouseUp() } else { hide() }
+        if NSEvent.pressedMouseButtons & 1 != 0 { hideAfterMouseUp() } else { hide(returnFocus: false) }
     }
 
     private func hideAfterMouseUp() {
@@ -138,7 +151,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             stopWaitingForMouseUp()
             // A drop on the panel makes it key again (see `attachDropped`), which arrives just after the mouse-up.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if self.panel.isVisible, !self.panel.isKeyWindow { self.hide() }
+                if self.panel.isVisible, !self.panel.isKeyWindow { self.hide(returnFocus: false) }
             }
         }
     }
@@ -169,7 +182,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.invalidateShadow()
     }
 
-    private static func roundedMask(radius: CGFloat) -> NSImage {
+    /// Nonisolated because AppKit may run an image's drawing handler on any thread.
+    private nonisolated static func roundedMask(radius: CGFloat) -> NSImage {
         let edge = radius * 2 + 1
         let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
             NSColor.black.setFill()
@@ -239,6 +253,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             hide()
         case "c" where flags.contains(.shift): model.copyLastAnswer()
         case "a" where flags.contains(.shift): model.attachContextWindow()
+        case "o": chooseFiles()
         case "v" where !flags.contains(.shift): return pasteAttachments()
         default: return false
         }
@@ -290,24 +305,36 @@ final class PanelController: NSObject, NSWindowDelegate {
         window.keyEquivalent = "a"
         window.keyEquivalentModifierMask = [.command, .shift]
         menu.addItem(window)
-        menu.addItem(ActionItem(title: "Choose Files…") { [weak self] in self?.chooseFiles() })
+        let files = ActionItem(title: "Choose Files…") { [weak self] in self?.chooseFiles() }
+        files.keyEquivalent = "o"
+        files.keyEquivalentModifierMask = [.command]
+        menu.addItem(files)
         let point = effectView.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
         menu.popUp(positioning: nil, at: point, in: effectView)
     }
 
     func chooseFiles() {
+        guard panel.isVisible, picker == nil else { return }
         let picker = NSOpenPanel()
         picker.allowsMultipleSelection = true
         picker.canChooseDirectories = true
         picker.prompt = "Attach"
         picker.level = .modalPanel  // above the floating panel
-        isPicking = true
+        self.picker = picker
+        // Clicking another app only hides an open panel, leaving it pending; end it as a click elsewhere would.
+        pickerEndsOnDeactivate = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.picker?.cancel(nil) }
+        }
         NSApp.activate()
         picker.begin { [weak self] response in
             guard let self else { return }
-            isPicking = false
+            if let pickerEndsOnDeactivate { NotificationCenter.default.removeObserver(pickerEndsOnDeactivate) }
+            pickerEndsOnDeactivate = nil
+            self.picker = nil
             if response == .OK { model.attach(files: picker.urls) }
-            show()
+            if NSApp.isActive { show() } else { hide(returnFocus: false) }
         }
     }
 

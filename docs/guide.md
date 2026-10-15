@@ -13,6 +13,7 @@ Everything beyond the [README](../README.md): shortcuts, attachments, slash comm
 | **⇧ ↩** or **⌥ ↩** | New line |
 | **⌘ ↩** | Continue this conversation in Ghostty. With text typed, start a dev session for it instead |
 | **⌘ ⇧ A** | Attach a screenshot of the window you were in when you opened Wisp |
+| **⌘ O** | Choose files or folders to attach |
 | **⌘ V** | Paste text; copied files and images become attachments |
 | **↑ ↓**, **Tab** | Move through the `/` suggestions and fill one in (**↩** does too) |
 | **⌘ M** | Choose the model and reasoning effort (or click the model chip) |
@@ -22,21 +23,21 @@ Everything beyond the [README](../README.md): shortcuts, attachments, slash comm
 | **⌘ ,** | Edit the settings file |
 | **esc** | Close, or stop listening |
 
-A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
+A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). Coming back to that answer never triggers the idle reset below. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
 
 ## Attachments
 
 Anything attached goes with your next question, shown as chips under the input. Remove one with its **×**.
 
 - **The window you were in.** Wisp remembers which app was in front when you opened it. **⌘ ⇧ A**, or **Attach *App* Window** in the paperclip menu, saves a screenshot of that app's front window. The first time, macOS asks for Screen Recording permission; turn Wisp on in System Settings and reopen it.
-- **Files and folders.** Copy them in Finder and press **⌘ V** in Wisp, choose them with **Choose Files…** in the paperclip menu, or drag them onto the panel.
+- **Files and folders.** Copy them in Finder and press **⌘ V** in Wisp, choose them with **Choose Files…** (**⌘ O**) in the paperclip menu, or drag them onto the panel.
 - **Images.** Paste an image (a screenshot copied with ⌃ ⇧ ⌘ 4, say) with **⌘ V**.
 
-Wisp sends the paths, and the agent opens the files with its own tools, so attachments work with every model. Screenshots and pasted images are saved in `~/Library/Caches/Wisp/attachments` and deleted after a week. **⌘ ↩** with only attachments starts a dev session about them.
+Wisp sends the paths, and the agent opens the files with its own tools, so attachments work with every model. Screenshots and pasted images are saved in `~/Library/Caches/Wisp/attachments` and deleted after a week (Wisp checks at launch and whenever the panel opens). **⌘ ↩** with only attachments starts a dev session about them.
 
 ## Slash commands
 
-Type `/` to see Grok Build's commands, your skills, and your workflows, with the best matches first. **Tab** or **↩** fills in the highlighted one, ready for arguments; **↩** again runs it. The list comes from Grok Build with each new conversation and is cached, so on a fresh install it appears after your first question.
+Type `/` to see Grok Build's commands, your skills, and your workflows, with the best matches first. **Tab** or **↩** fills in the highlighted one, ready for arguments, and **↩** on a command typed in full runs it. The list comes from Grok Build with each new conversation and is cached, so on a fresh install it appears after your first question.
 
 Commands that only open a view in Grok Build's terminal UI, such as `/context` and `/memory`, have no output in Wisp. Wisp says so; **⌘ ↩** opens the conversation in Ghostty, where they work.
 

@@ -25,6 +25,14 @@ import Testing
         #expect(config.hotkey == "option+space")
         #expect(config.reasoningEffort == "low")
         #expect(!config.remoteControl)
+        #expect(config.notifyWhenDone)
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    @Test func notificationsCanBeTurnedOff() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(#"{ "notifyWhenDone": false }"#.utf8).write(to: file)
+        #expect(!WispConfig.load(from: file).config.notifyWhenDone)
         try? FileManager.default.removeItem(at: directory)
     }
 

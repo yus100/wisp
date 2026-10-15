@@ -16,7 +16,8 @@ final class AnswerNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     func notify(_ turn: Turn) {
         let title = TextPreview.line(turn.query, limit: 70)
-        let body = TextPreview.line(turn.answer, limit: 180)
+        // A command with no output has only its notice to show.
+        let body = TextPreview.line(turn.answer.isEmpty ? turn.notice ?? "" : turn.answer, limit: 180)
         Log.info("answer finished in the background; notifying")
         Task { await Self.post(id: turn.id.uuidString, title: title, body: body) }
     }

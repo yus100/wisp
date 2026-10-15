@@ -30,6 +30,18 @@ import Testing
                 ]))
     }
 
+    @Test func anUpdateWithoutAListDecodesAsEmpty() throws {
+        let note = try JSONDecoder().decode(
+            SessionNotification.self,
+            from: Data(#"{"sessionId":"s","update":{"sessionUpdate":"available_commands_update"}}"#.utf8))
+        #expect(note.update == .availableCommands([]))
+    }
+
+    @Test func theCachedListRoundTrips() throws {
+        let decoded = try JSONDecoder().decode([SlashCommand].self, from: JSONEncoder().encode(commands))
+        #expect(decoded == commands)
+    }
+
     @Test func prefixMatchesComeFirst() {
         #expect(SlashCommand.suggestions(for: "/co", in: commands).map(\.name) == ["compact", "context", "code-review"])
         #expect(SlashCommand.suggestions(for: "/review", in: commands).map(\.name) == ["review", "code-review"])

@@ -46,7 +46,7 @@ enum WindowCapture {
         configuration.showsCursor = false
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
 
-        let file = directory.appending(path: "\(name) window \(AppModel.stamp()).png")
+        let file = AppModel.newFile(named: "\(name) window", in: directory)
         guard let destination = CGImageDestinationCreateWithURL(file as CFURL, UTType.png.identifier as CFString, 1, nil) else {
             throw CocoaError(.fileWriteUnknown)
         }

@@ -25,7 +25,7 @@ final class MicrophoneCapture: @unchecked Sendable {
     }
 
     /// Starts the microphone. The stream ends when `stop()` is called.
-    func start(onLevel: @escaping @Sendable (Float) -> Void) throws -> AsyncStream<Data> {
+    func start() throws -> AsyncStream<Data> {
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
@@ -36,9 +36,7 @@ final class MicrophoneCapture: @unchecked Sendable {
         }
         let (stream, sink) = AsyncStream.makeStream(of: Data.self)
         lock.withLock { self.sink = sink }
-        let meter = LevelMeter(onLevel: onLevel)
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { buffer, _ in
-            meter.measure(buffer)
             if let pcm = converter.convert(buffer) { sink.yield(pcm) }
         }
         engine.prepare()
@@ -102,28 +100,5 @@ private final class PCMConverter: @unchecked Sendable {
         }
         guard status != .error, output.frameLength > 0, let samples = output.int16ChannelData else { return nil }
         return Data(bytes: samples[0], count: Int(output.frameLength) * MemoryLayout<Int16>.size)
-    }
-}
-
-/// Reports the input level (0...1) about twenty times a second for the panel's mic indicator.
-private final class LevelMeter: @unchecked Sendable {
-    private let onLevel: @Sendable (Float) -> Void
-    private var lastReport = Date.distantPast
-
-    init(onLevel: @escaping @Sendable (Float) -> Void) {
-        self.onLevel = onLevel
-    }
-
-    func measure(_ buffer: AVAudioPCMBuffer) {
-        let now = Date()
-        guard now.timeIntervalSince(lastReport) >= 0.05, let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else {
-            return
-        }
-        lastReport = now
-        var sum: Float = 0
-        for index in 0..<Int(buffer.frameLength) { sum += samples[index] * samples[index] }
-        let rms = (sum / Float(buffer.frameLength)).squareRoot()
-        let decibels = 20 * log10(max(rms, 1e-6))
-        onLevel(min(1, max(0, (decibels + 55) / 40)))
     }
 }

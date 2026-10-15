@@ -23,7 +23,7 @@ A conversation survives closing the panel. After 10 idle minutes the next open s
 
 ## Voice
 
-Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dictate hands-free. Speech goes to the speech-to-text service Grok Build's voice mode uses, signed in with your existing Grok login, so there is no key to set up. To use an xAI API key instead, export `XAI_API_KEY` in your shell profile.
+Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dictate hands-free. Hands-free dictation keeps listening through pauses and sends once you have been quiet for 2.5 seconds (`voicePauseSeconds`); press **↩** or the hotkey to send sooner. Speech goes to the speech-to-text service Grok Build's voice mode uses, signed in with your existing Grok login, so there is no key to set up. To use an xAI API key instead, export `XAI_API_KEY` in your shell profile.
 
 ## Coding sessions in Ghostty
 
@@ -51,7 +51,7 @@ Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dic
 | `workingDirectory` | `~` | Folder quick answers run in |
 | `idleResetMinutes` | `10` | Start fresh after this much idle time; `0` never resets |
 | `voiceLanguage` | `en` | Speech-to-text language code |
-| `voiceSilenceSeconds` | `1.2` | Hands-free voice sends after this much silence; `0` waits for you |
+| `voicePauseSeconds` | `2.5` | Hands-free voice sends once you have been quiet this long; `0` waits for you |
 | `ghosttyTarget` | `window` | Open sessions in a new `window` or a new `tab` of the front window |
 | `grokPath` | `""` | Path to `grok`; empty searches your login shell's PATH |
 | `extraRules` | `""` | Extra instructions for the quick-answer agent |

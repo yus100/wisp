@@ -22,8 +22,8 @@ public struct WispConfig: Codable, Equatable, Sendable {
     public var idleResetMinutes = 10.0
     /// Speech-to-text language code.
     public var voiceLanguage = "en"
-    /// Hands-free voice sends after this many seconds of silence; 0 waits for the hotkey or Return.
-    public var voiceSilenceSeconds = 1.2
+    /// Hands-free voice sends once you have been quiet this many seconds; 0 waits for the hotkey or Return.
+    public var voicePauseSeconds = 2.5
     /// Open Grok Build sessions in a new Ghostty window or a new tab of the front window.
     public var ghosttyTarget = GhosttyTarget.window
     /// Extra instructions appended to the quick-answer rules.
@@ -45,7 +45,7 @@ public struct WispConfig: Codable, Equatable, Sendable {
         grokPath = try container.decode(.grokPath, default: defaults.grokPath)
         idleResetMinutes = try container.decode(.idleResetMinutes, default: defaults.idleResetMinutes)
         voiceLanguage = try container.decode(.voiceLanguage, default: defaults.voiceLanguage)
-        voiceSilenceSeconds = try container.decode(.voiceSilenceSeconds, default: defaults.voiceSilenceSeconds)
+        voicePauseSeconds = try container.decode(.voicePauseSeconds, default: defaults.voicePauseSeconds)
         ghosttyTarget = try container.decode(.ghosttyTarget, default: defaults.ghosttyTarget)
         extraRules = try container.decode(.extraRules, default: defaults.extraRules)
         remoteControl = try container.decode(.remoteControl, default: defaults.remoteControl)
@@ -68,10 +68,21 @@ public struct WispConfig: Codable, Equatable, Sendable {
         }
     }
 
+    /// Keys earlier versions wrote that no longer mean anything. `voiceSilenceSeconds` measured time after
+    /// the server's end-of-utterance signal; `voicePauseSeconds` measures actual quiet.
+    static let retiredKeys = ["voiceSilenceSeconds"]
+
     /// Reads the config at launch, writing the defaults on first run so every setting is discoverable.
+    /// A file with retired keys is rewritten without them, so a stale value never looks like it applies.
     public static func load(from url: URL) -> (config: WispConfig, problem: String?) {
         switch read(from: url) {
         case .loaded(let config):
+            if let data = try? Data(contentsOf: url),
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                retiredKeys.contains(where: { object[$0] != nil })
+            {
+                try? config.save(to: url)
+            }
             return (config, nil)
         case .invalid(let problem):
             return (WispConfig(), problem)

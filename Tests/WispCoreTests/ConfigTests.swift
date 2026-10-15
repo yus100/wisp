@@ -37,6 +37,20 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// Issue #1: the first run wrote the old 1.2 s default into every config file, pinning it.
+    @Test func retiredKeysAreDroppedOnLoad() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(#"{ "voiceSilenceSeconds": 1.2, "model": "kept" }"#.utf8).write(to: file)
+        let (config, problem) = WispConfig.load(from: file)
+        #expect(problem == nil)
+        #expect(config.voicePauseSeconds == 2.5)
+        #expect(config.model == "kept")
+        let rewritten = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any]
+        #expect(rewritten?["voiceSilenceSeconds"] == nil)
+        #expect(rewritten?["model"] as? String == "kept")
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     @Test func readHasNoSideEffects() throws {
         #expect(WispConfig.read(from: file) == .missing)
         #expect(!FileManager.default.fileExists(atPath: file.path))
@@ -66,7 +80,7 @@ import Testing
     @Test func saveRoundTrips() throws {
         var config = WispConfig()
         config.model = "claude-opus-5-5"
-        config.voiceSilenceSeconds = 0
+        config.voicePauseSeconds = 0
         try config.save(to: file)
         #expect(WispConfig.load(from: file).config == config)
         try? FileManager.default.removeItem(at: directory)

@@ -3,8 +3,10 @@ import WispCore
 
 /// One dictation at a time: microphone (or a WAV file) → xAI speech-to-text → transcript.
 ///
-/// Every step of a dictation checks its generation token, so a stale task (from a cancelled or
-/// superseded dictation) can never change the state of a newer one.
+/// Audio passes through a forwarding stage on its way to speech-to-text, where it drives the level
+/// meter and the end-of-speech detector. Finishing ends that stage, so the microphone and recordings
+/// stop the same way. Every step checks the dictation's generation token, so a stale task (from a
+/// cancelled or superseded dictation) can never change the state of a newer one.
 @MainActor
 final class VoiceController: ObservableObject {
     enum Mode {
@@ -19,7 +21,7 @@ final class VoiceController: ObservableObject {
         /// Waiting for microphone permission or the first audio.
         case starting
         case listening
-        /// Microphone off; waiting for the final transcript.
+        /// Audio ended; waiting for the final transcript.
         case finishing
     }
 
@@ -39,15 +41,20 @@ final class VoiceController: ObservableObject {
     var credentials: (() async throws -> String)?
 
     var language = "en"
-    var silenceSeconds = 1.2
+    /// Hands-free dictation sends once the speaker has been quiet this many seconds; 0 waits for the
+    /// hotkey or Return.
+    var pauseSeconds = 2.5
 
     private var generation: UUID?
     private var microphone: MicrophoneCapture?
+    private var detector = EndOfSpeechDetector(silence: 2.5)
+    private var audioSink: AsyncStream<Data>.Continuation?
     private var sendWhenDone = false
     private var stopRequested = false
-    private var heardSpeech = false
+    /// Any transcribed text so far in this dictation.
+    private var hasText = false
     private var task: Task<Void, Never>?
-    private var silenceTask: Task<Void, Never>?
+    private var forwarder: Task<Void, Never>?
     private var noSpeechTask: Task<Void, Never>?
 
     /// Starts listening. `recording` (WAV bytes) plays instead of the microphone and sends when it ends.
@@ -57,9 +64,10 @@ final class VoiceController: ObservableObject {
         generation = id
         self.mode = mode
         state = .starting
+        detector = EndOfSpeechDetector(silence: pauseSeconds)
         sendWhenDone = recording != nil
         stopRequested = false
-        heardSpeech = false
+        hasText = false
         task = Task { await run(id, recording: recording) }
     }
 
@@ -68,11 +76,10 @@ final class VoiceController: ObservableObject {
         guard state != .idle else { return }
         sendWhenDone = send
         stopRequested = true
-        silenceTask?.cancel()
         noSpeechTask?.cancel()
         if state == .listening { state = .finishing }
-        // Ending the audio stream makes the speech-to-text client send `audio.done`.
-        microphone?.stop()
+        // Ending the outgoing audio makes the speech-to-text client send `audio.done`.
+        stopAudio()
     }
 
     /// Stops immediately and drops anything still in flight. Text already transcribed stays where it is.
@@ -90,8 +97,10 @@ final class VoiceController: ObservableObject {
     private func run(_ id: UUID, recording: Data?) async {
         var transcript = TranscriptAssembler()
         do {
-            let audio = try await openAudio(id, recording: recording)
-            guard let audio, generation == id else { return complete(id, text: "", error: nil) }
+            guard let source = try await openAudio(id, recording: recording), generation == id else {
+                return complete(id, text: "", error: nil)
+            }
+            let audio = forward(source, id)
             state = stopRequested ? .finishing : .listening
 
             guard let credentials else { throw GrokCredentials.Failure.notSignedIn }
@@ -124,41 +133,62 @@ final class VoiceController: ObservableObject {
         }
         guard generation == id, !stopRequested else { return nil }
         let microphone = MicrophoneCapture()
-        let stream = try microphone.start { [weak self] level in
-            Task { @MainActor in
-                guard let self, self.generation == id else { return }
-                self.level = level
-            }
-        }
+        let stream = try microphone.start()
         self.microphone = microphone
         return stream
+    }
+
+    /// Passes audio through to speech-to-text, measuring it on the way: the level for the mic indicator,
+    /// and, in hands-free mode, the pause that ends the dictation.
+    private func forward(_ source: AsyncStream<Data>, _ id: UUID) -> AsyncStream<Data> {
+        let (outgoing, sink) = AsyncStream.makeStream(of: Data.self)
+        audioSink = sink
+        forwarder = Task { [weak self] in
+            for await chunk in source {
+                guard let self, generation == id, !Task.isCancelled else { break }
+                sink.yield(chunk)
+                detector.process(chunk)
+                level = detector.level
+                if mode == .handsFree, pauseSeconds > 0, hasText, !stopRequested, detector.silenceElapsed {
+                    finish(send: true)
+                }
+            }
+            sink.finish()
+        }
+        return outgoing
     }
 
     private func handle(_ event: SpeechToText.Event, transcript: inout TranscriptAssembler, _ id: UUID) {
         // Time "no speech" from when the stream is up, not from the token refresh or connect before it.
         if case .ready = event { armNoSpeechWatchdog(id) }
-        let finishedUtterance = transcript.apply(event)
-        if case .partial(let text, _, _) = event, !text.trimmingCharacters(in: .whitespaces).isEmpty {
-            heardSpeech = true
-            silenceTask?.cancel()
+        transcript.apply(event)
+        hasText = hasText || !transcript.isEmpty
+        // Live (non-final) text arrives only while someone is talking, so it counts as activity;
+        // the finalized repeats that follow a pause do not.
+        if case .partial(let text, isFinal: false, _) = event, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            detector.heardWords()
         }
         onTranscript?(transcript.text)
-        if finishedUtterance, mode == .handsFree, silenceSeconds > 0, !stopRequested {
-            silenceTask = Task { [weak self, silenceSeconds] in
-                try? await Task.sleep(for: .seconds(silenceSeconds))
-                guard let self, !Task.isCancelled, generation == id else { return }
-                finish(send: true)
-            }
-        }
     }
 
     private func armNoSpeechWatchdog(_ id: UUID) {
+        noSpeechTask?.cancel()
         noSpeechTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(12))
-            guard let self, !Task.isCancelled, generation == id, !heardSpeech else { return }
+            guard let self, !Task.isCancelled, generation == id, !hasText else { return }
+            let heardSound = detector.heardVoice
             finish(send: false)
-            onNotice?("No speech detected. Check the input device in System Settings › Sound.")
+            onNotice?(
+                heardSound
+                    ? "Wisp hears sound but no words are coming back. Try speaking closer to the microphone."
+                    : "No speech detected. Check the input device in System Settings › Sound.")
         }
+    }
+
+    private func stopAudio() {
+        microphone?.stop()
+        audioSink?.finish()
+        forwarder?.cancel()
     }
 
     private func complete(_ id: UUID, text: String, error: Error?) {
@@ -171,9 +201,10 @@ final class VoiceController: ObservableObject {
     }
 
     private func reset() {
-        microphone?.stop()
+        stopAudio()
         microphone = nil
-        silenceTask?.cancel()
+        audioSink = nil
+        forwarder = nil
         noSpeechTask?.cancel()
         state = .idle
         level = 0

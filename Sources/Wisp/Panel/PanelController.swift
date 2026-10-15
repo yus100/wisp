@@ -128,6 +128,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// click), hand focus back to the previous app. Not wanted when another app is already taking over.
     func hide(returnFocus: Bool = true) {
         if model.voice.isActive, model.voice.mode == .pushToTalk { model.voice.cancel() }
+        // A notice belongs to the moment it was seen in; closing the panel dismisses it.
+        if panel.isVisible { model.notice = nil }
         panel.orderOut(nil)
         removeKeyMonitor()
         stopWaitingForMouseUp()

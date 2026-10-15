@@ -26,13 +26,16 @@ import Testing
         #expect(config.reasoningEffort == "low")
         #expect(!config.remoteControl)
         #expect(config.notifyWhenDone)
+        #expect(config.launchAtLogin)
         try? FileManager.default.removeItem(at: directory)
     }
 
-    @Test func notificationsCanBeTurnedOff() throws {
+    @Test func notificationsAndLaunchAtLoginCanBeTurnedOff() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try Data(#"{ "notifyWhenDone": false }"#.utf8).write(to: file)
-        #expect(!WispConfig.load(from: file).config.notifyWhenDone)
+        try Data(#"{ "notifyWhenDone": false, "launchAtLogin": false }"#.utf8).write(to: file)
+        let config = WispConfig.load(from: file).config
+        #expect(!config.notifyWhenDone)
+        #expect(!config.launchAtLogin)
         try? FileManager.default.removeItem(at: directory)
     }
 

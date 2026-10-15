@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.onMainKey = { [weak self] in self?.mainKey($0) }
         hotkeys.onVoiceKey = { [weak self] in self?.toggleVoice() }
         if let problem = registerHotkeys() ?? configStore.problem { model.notice = Notice(problem) }
+        if let problem = LoginItem.apply(configStore.config.launchAtLogin), model.notice == nil { model.notice = problem }
 
         notifyWhenAnswersFinishInBackground()
         model.pruneOldAttachments()
@@ -104,6 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var problem: String?
         if old.hotkey != new.hotkey || old.voiceHotkey != new.voiceHotkey {
             problem = registerHotkeys()
+        }
+        if old.launchAtLogin != new.launchAtLogin, let loginProblem = LoginItem.apply(new.launchAtLogin) {
+            model.notice = loginProblem
+            return
         }
         if fromDisk { model.notice = Notice(problem ?? "Config reloaded.") }
     }

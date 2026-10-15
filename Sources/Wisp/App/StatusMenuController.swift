@@ -1,6 +1,5 @@
 import AppKit
 import Combine
-import ServiceManagement
 import WispCore
 
 /// The sparkle in the menu bar and its menu, rebuilt each time it opens.
@@ -70,7 +69,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(ActionItem(title: "Edit Config…") { NSWorkspace.shared.open(WispPaths.standard.configFile) })
         menu.addItem(
-            ActionItem(title: "Launch at Login", checked: SMAppService.mainApp.status == .enabled) { Self.toggleLaunchAtLogin() })
+            ActionItem(title: "Launch at Login", checked: config.launchAtLogin) { [model] in model.toggleLaunchAtLogin() })
         menu.addItem(ActionItem(title: "Restart Agent") { [model] in model.restartAgent() })
         menu.addItem(ActionItem(title: "Show Logs") { NSWorkspace.shared.open(WispPaths.standard.logs) })
         menu.addItem(.separator())
@@ -106,18 +105,4 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         return item
     }
 
-    private static func toggleLaunchAtLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Could not change Launch at Login"
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
-        }
-    }
 }

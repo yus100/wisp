@@ -242,6 +242,7 @@ final class ControlServer {
             "isWorking": model.isWorking,
             "isHandingOff": model.isHandingOff,
             "answerWaiting": model.answerWaiting,
+            "launchAtLogin": LoginItem.statusName,
             "choosingFiles": panel.picker != nil,
             "sessionId": model.sessionID ?? NSNull(),
             "notice": model.notice?.text ?? NSNull(),

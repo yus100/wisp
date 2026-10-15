@@ -76,6 +76,7 @@ Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dic
 | `grokPath` | `""` | Path to `grok`; empty searches your login shell's PATH |
 | `extraRules` | `""` | Extra instructions for the quick-answer agent |
 | `notifyWhenDone` | `true` | Post a notification when an answer finishes while the panel is closed |
+| `launchAtLogin` | `true` | Start Wisp when you log in, so the hotkeys work from startup (also **Launch at Login** in the menu) |
 | `remoteControl` | `false` | Accept `Wisp ctl` commands beyond show and hide (see [Scripting](#scripting)) |
 
 Hotkeys combine `cmd`, `option`, `ctrl`, and `shift` with a key such as `space`, `k`, `return`, or `f5`. When Wisp can't register one, the panel says so.
@@ -112,7 +113,8 @@ Everything except show, hide, and toggle needs `"remoteControl": true`, because 
 
 | Problem | Fix |
 | --- | --- |
-| The hotkey does nothing | Another app may use the same shortcut. Set `hotkey` to something else |
+| The hotkey does nothing after a restart | Wisp wasn't running. It starts at login when `launchAtLogin` is on (the default) and it's installed in an Applications folder; check that **Wisp** is on under Login Items in System Settings |
+| The hotkey does nothing while Wisp runs | Another app may use the same shortcut (ChatGPT and Gemini both default to ⌥ Space). Turn theirs off or set `hotkey` to something else |
 | "Could not find the grok CLI" | Install [Grok Build](https://x.ai/cli), or set `grokPath` |
 | Voice says it needs a login | Run `grok login` in a terminal |
 | "Wisp is not allowed to control Ghostty" | Click **Open Settings** in the notice and turn on Ghostty under Wisp |

@@ -30,6 +30,8 @@ public struct WispConfig: Codable, Equatable, Sendable {
     public var extraRules = ""
     /// Post a notification when an answer finishes while the panel is hidden.
     public var notifyWhenDone = true
+    /// Start Wisp when you log in, so the hotkeys work from startup.
+    public var launchAtLogin = true
     /// Accept `Wisp ctl` commands. Off by default: when on, any process running as you can drive the
     /// always-approve agent and the microphone through Wisp's privacy permissions.
     public var remoteControl = false
@@ -51,6 +53,7 @@ public struct WispConfig: Codable, Equatable, Sendable {
         ghosttyTarget = try container.decode(.ghosttyTarget, default: defaults.ghosttyTarget)
         extraRules = try container.decode(.extraRules, default: defaults.extraRules)
         notifyWhenDone = try container.decode(.notifyWhenDone, default: defaults.notifyWhenDone)
+        launchAtLogin = try container.decode(.launchAtLogin, default: defaults.launchAtLogin)
         remoteControl = try container.decode(.remoteControl, default: defaults.remoteControl)
     }
 

@@ -59,7 +59,7 @@ git clone https://github.com/yus100/wisp.git
 cd wisp && make install
 ```
 
-Then tap **⌥ Space**. macOS asks for the microphone, folder access, and Screen Recording (for attaching windows) the first time Wisp needs each.
+Then tap **⌥ Space**. Wisp starts when you log in, so the hotkey is always there. macOS asks for the microphone, folder access, and Screen Recording (for attaching windows) the first time Wisp needs each.
 
 ## Shortcuts
 

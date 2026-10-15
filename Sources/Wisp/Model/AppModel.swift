@@ -304,6 +304,10 @@ final class AppModel: ObservableObject {
         updateConfig { $0.reasoningEffort = effort }
     }
 
+    func toggleLaunchAtLogin() {
+        updateConfig { $0.launchAtLogin.toggle() }
+    }
+
     private func updateConfig(_ change: (inout WispConfig) -> Void) {
         do {
             try configStore.update(change)

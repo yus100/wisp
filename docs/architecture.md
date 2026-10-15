@@ -24,7 +24,7 @@ Sources/WispCore/
   Support/        Log, WispPaths, ProcessRunner, ShellEnvironment, TextPreview, withDeadline
 Sources/Wisp/
   App/            main, AppDelegate, ConfigStore, HotkeyController, StatusMenuController, RemoteControl, MainMenu,
-                  AnswerNotifier, Screenshots (renders the README images)
+                  AnswerNotifier, LoginItem, Screenshots (renders the README images)
   Model/          AppModel (coordinator, +Context for attachments and commands), AgentHost (agent lifecycle),
                   WindowCapture
   Voice/          VoiceController, MicrophoneCapture
@@ -112,6 +112,10 @@ MicrophoneCapture ──AsyncStream<Data>──▶ SpeechToText.transcribe ─�
 | Attachments | `~/Library/Caches/Wisp/attachments`: window screenshots and pasted images, kept a week |
 | Logs | `~/Library/Logs/Wisp/app.log` (Wisp) and `agent.log` (grok's stderr); each starts afresh past 5 MB, checked at launch and agent start |
 | Sessions | Wherever grok keeps them (`~/.grok/sessions`), like any other Grok Build session |
+
+## Launch at login
+
+`LoginItem` keeps `SMAppService.mainApp` in line with `launchAtLogin` (on by default) at every launch and whenever the setting changes, including from the menu toggle. A copy running outside an Applications folder (a build in `build/`) never registers, so it cannot replace the installed app as the login item. A failure or a pending approval shows a notice with **Open Settings** for Login Items.
 
 ## Remote control
 

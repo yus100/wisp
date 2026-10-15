@@ -306,7 +306,7 @@ public struct ToolInput: Decodable, Sendable, Equatable {
     }
 }
 
-/// Grok's report on retrying a failed model call.
+/// The agent's report on retrying a failed model call.
 public enum RetryState: Decodable, Sendable, Equatable {
     case retrying(attempt: Int, maxRetries: Int?)
     case exhausted(reason: String)
@@ -321,7 +321,7 @@ public enum RetryState: Decodable, Sendable, Equatable {
         case "retrying":
             self = .retrying(attempt: int(.attempt) ?? 1, maxRetries: int(.maxRetriesSnake) ?? int(.maxRetries))
         case "exhausted":
-            self = .exhausted(reason: string(.reason) ?? "Grok is unavailable right now.")
+            self = .exhausted(reason: string(.reason) ?? "The model is unavailable right now.")
         case "failed":
             let type = string(.errorTypeSnake) ?? string(.errorType)
             self = .failed(message: string(.message) ?? "The request failed.", isAuthError: type == "auth")

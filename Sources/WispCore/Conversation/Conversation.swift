@@ -80,7 +80,7 @@ public struct Conversation: Equatable, Sendable {
                     turn.steps[index].title = Self.tidy(title, paths: paths)
                 }
             case .retry(.retrying(let attempt, let maxRetries)):
-                turn.notice = "Grok is busy, retrying" + (maxRetries.map { " (\(attempt) of \($0))" } ?? "") + "…"
+                turn.notice = "The model is busy, retrying" + (maxRetries.map { " (\(attempt) of \($0))" } ?? "") + "…"
             case .retry(.exhausted(let reason)):
                 turn.notice = nil
                 turn.state = .failed(reason)

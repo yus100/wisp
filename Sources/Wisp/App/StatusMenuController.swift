@@ -26,7 +26,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let config = model.config
-        menu.addItem(ActionItem(title: "Ask Grok   \(HotkeySpec.display(config.hotkey)) (hold to talk)", handler: showPanel))
+        menu.addItem(ActionItem(title: "Ask Anything   \(HotkeySpec.display(config.hotkey)) (hold to talk)", handler: showPanel))
         menu.addItem(ActionItem(title: "Voice   \(HotkeySpec.display(config.voiceHotkey))", handler: startVoice))
         menu.addItem(
             ActionItem(title: "New Conversation") { [model, showPanel] in
@@ -42,7 +42,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(ActionItem(title: "Edit Config…") { NSWorkspace.shared.open(WispPaths.standard.configFile) })
         menu.addItem(
             ActionItem(title: "Launch at Login", checked: SMAppService.mainApp.status == .enabled) { Self.toggleLaunchAtLogin() })
-        menu.addItem(ActionItem(title: "Restart Grok Agent") { [model] in model.restartAgent() })
+        menu.addItem(ActionItem(title: "Restart Agent") { [model] in model.restartAgent() })
         menu.addItem(ActionItem(title: "Show Logs") { NSWorkspace.shared.open(WispPaths.standard.logs) })
         menu.addItem(.separator())
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"

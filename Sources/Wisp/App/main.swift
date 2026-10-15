@@ -7,6 +7,9 @@ let arguments = CommandLine.arguments
 if arguments.count > 1, arguments[1] == "ctl" {
     exit(ControlClient.run(Array(arguments.dropFirst(2))))
 }
+if arguments.count > 2, arguments[1] == "render-screenshots" {
+    exit(MainActor.assumeIsolated { Screenshots.render(into: URL(filePath: arguments[2])) })
+}
 
 // Running the binary again shows the panel of the copy already running. (Opening the app from Finder
 // or `open` never starts a second copy; the running one gets a reopen event instead.)

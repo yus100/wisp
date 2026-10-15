@@ -100,12 +100,12 @@ public struct GrokSessionStore: Sendable {
         let fileManager = FileManager.default
         let direct = sessions.appending(path: Self.encode(directory)).appending(path: sessionID)
         if fileManager.fileExists(atPath: direct.path) { return direct }
-        // Grok hashes very long paths, so fall back to looking in every group.
+        // grok hashes very long paths, so fall back to looking in every group.
         let groups = (try? fileManager.contentsOfDirectory(at: sessions, includingPropertiesForKeys: nil)) ?? []
         return groups.map { $0.appending(path: sessionID) }.first { fileManager.fileExists(atPath: $0.path) }
     }
 
-    /// Grok names each group by percent-encoding the working directory, `/` included.
+    /// grok names each group by percent-encoding the working directory, `/` included.
     static func encode(_ directory: String) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")

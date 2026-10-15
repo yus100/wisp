@@ -112,6 +112,12 @@ final class AppModel: ObservableObject {
         host.restart()
     }
 
+    /// Shows sample content without touching the agent; used to render the README screenshots.
+    func showSample(_ conversation: Conversation, catalog: ModelCatalog) {
+        self.conversation = conversation
+        self.catalog = catalog
+    }
+
     // MARK: Conversation
 
     func submit(_ text: String? = nil) {
@@ -219,7 +225,7 @@ final class AppModel: ObservableObject {
     /// The agent crashed: fail the running turn, then re-attach the session on a fresh agent so
     /// follow-ups keep their context.
     private func agentDied(status: Int32) {
-        if isWorking { conversation.fail("Grok stopped unexpectedly (status \(status)). Ask again to continue.") }
+        if isWorking { conversation.fail("The agent stopped unexpectedly (status \(status)). Ask again to continue.") }
         guard let session = sessionID else { return }
         reattaching = Task {
             defer { reattaching = nil }
@@ -227,7 +233,7 @@ final class AppModel: ObservableObject {
                 try await reattach(session, on: try await host.running())
             } catch {
                 if sessionID == session { sessionID = nil }
-                notice = Notice("Grok restarted, so follow-ups start a new session.")
+                notice = Notice("The agent restarted, so follow-ups start a new session.")
             }
         }
     }

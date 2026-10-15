@@ -25,11 +25,11 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Wisp opens Grok Build sessions in new Ghostty windows.</string>
 	<key>NSDesktopFolderUsageDescription</key>
-	<string>Grok answers questions about your files.</string>
+	<string>Wisp answers questions about your files.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>Grok answers questions about your files.</string>
+	<string>Wisp answers questions about your files.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
-	<string>Grok answers questions about your files.</string>
+	<string>Wisp answers questions about your files.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>

@@ -4,7 +4,7 @@ APP := build/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications
 SOURCES := Sources Tests Package.swift scripts/make-icon.swift
 
-.PHONY: help build app install uninstall run stop test lint format icon smoke clean
+.PHONY: help build app install uninstall run stop test lint format icon screenshots smoke clean
 
 help: ## List the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -50,8 +50,11 @@ lint: ## Check formatting
 format: ## Format the sources in place
 	swift format --in-place --recursive $(SOURCES)
 
-icon: ## Redraw Resources/AppIcon.icns
+icon: ## Redraw Resources/AppIcon.icns and docs/assets/icon.png
 	swift scripts/make-icon.swift
+
+screenshots: build ## Render docs/assets/panel.png from sample data (offscreen)
+	.build/release/$(APP_NAME) render-screenshots docs/assets
 
 smoke: ## End-to-end check against the installed app (needs "remoteControl": true)
 	scripts/smoke-test.sh

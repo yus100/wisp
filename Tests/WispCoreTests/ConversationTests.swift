@@ -46,7 +46,7 @@ import Testing
         var conversation = Conversation(paths: paths)
         conversation.begin("q")
         conversation.apply(.retry(.retrying(attempt: 2, maxRetries: 5)))
-        #expect(conversation.turns[0].notice == "Grok is busy, retrying (2 of 5)…")
+        #expect(conversation.turns[0].notice == "The model is busy, retrying (2 of 5)…")
         conversation.apply(.messageChunk("ok"))
         #expect(conversation.turns[0].notice == nil)
     }

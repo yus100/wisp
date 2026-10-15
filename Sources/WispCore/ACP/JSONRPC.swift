@@ -33,8 +33,8 @@ public enum ACPError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .rpc(_, let message): message
-        case .disconnected: "Lost the connection to Grok."
-        case .missingResult(let method): "Grok sent an empty reply to \(method)."
+        case .disconnected: "Lost the connection to the agent."
+        case .missingResult(let method): "The agent sent an empty reply to \(method)."
         }
     }
 }

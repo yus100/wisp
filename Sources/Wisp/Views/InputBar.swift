@@ -30,7 +30,7 @@ struct InputBar: View {
         switch voice.state {
         case .starting, .listening: "Listening…"
         case .finishing: "Finishing…"
-        case .idle: model.conversation.isEmpty ? "Ask Grok anything" : "Ask a follow-up"
+        case .idle: model.conversation.isEmpty ? "Ask anything" : "Ask a follow-up"
         }
     }
 

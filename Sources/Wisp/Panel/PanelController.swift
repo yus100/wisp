@@ -24,10 +24,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     let panel: WispPanel
     let effectView = NSVisualEffectView()
     private(set) var hostingView: NSHostingView<PanelView>!
-    private let layout = PanelLayout()
+    let layout = PanelLayout()
     private var keyMonitor: Any?
     private var topEdge: CGFloat = 0
     private var measuredHeight: CGFloat = 56
+    /// The height with nothing but the input row, for opening right after an idle reset.
+    private var emptyHeight: CGFloat = 56
     private var pendingHeight: CGFloat?
 
     init(model: AppModel) {
@@ -82,9 +84,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     func show() {
         model.panelWillShow()
         if !panel.isVisible {
-            // Size for the content as it is now (an idle reset may just have cleared it), not as it was.
-            let fitting = hostingView.fittingSize.height
-            if fitting > 0 { measuredHeight = fitting }
+            // An idle reset may just have cleared the conversation; open at the empty height, not the old one.
+            if model.conversation.isEmpty && model.notice == nil { measuredHeight = emptyHeight }
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
             if let frame = screen?.visibleFrame {
                 layout.maxConversationHeight = max(200, frame.height * 0.62 - 120)
@@ -129,6 +130,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard let height = pendingHeight else { return }
         pendingHeight = nil
         measuredHeight = height
+        if model.conversation.isEmpty && model.notice == nil { emptyHeight = height }
         guard abs(panel.frame.height - height) > 0.5 else { return }
         if topEdge == 0 { topEdge = panel.frame.maxY }
         panel.setFrame(NSRect(x: panel.frame.minX, y: topEdge - height, width: Self.width, height: height), display: true)

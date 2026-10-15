@@ -13,6 +13,7 @@
   <a href="https://github.com/yus100/wisp/actions/workflows/ci.yml"><img src="https://github.com/yus100/wisp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -83,3 +84,7 @@ make help      # everything else
 ```
 
 Start with [development](docs/development.md) and [architecture](docs/architecture.md).
+
+## License
+
+[MIT](LICENSE)

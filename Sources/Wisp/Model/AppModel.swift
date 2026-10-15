@@ -18,7 +18,10 @@ struct Notice: Equatable {
 /// session, voice input, model choice, and hand-off to Ghostty.
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var input = ""
+    @Published var input = "" {
+        // Typing changes the suggestion list, so the highlight starts over at the best match.
+        didSet { if input != oldValue { selectedSuggestion = 0 } }
+    }
     @Published private(set) var conversation: Conversation
     @Published var notice: Notice?
     @Published private(set) var catalog = ModelCatalog()
@@ -33,8 +36,12 @@ final class AppModel: ObservableObject {
     @Published var selectedSuggestion = 0
     /// The app that was in front when the panel opened; "Attach Window" captures its window.
     var contextApp: NSRunningApplication?
-    /// An answer finished; the delegate notifies if the panel is hidden.
+    /// An answer finished; the delegate notifies if the panel is hidden. Not called for hand-offs.
     var onAnswerFinished: ((Turn) -> Void)?
+    /// Bumped when the question is sent or the conversation starts over, so a window capture that
+    /// finishes afterwards is dropped instead of joining the next question.
+    var attachmentGeneration = 0
+    var isCapturingWindow = false
     /// An answer finished while the panel was closed; cleared when it opens. Shown in the menu bar.
     @Published var answerWaiting = false
 
@@ -100,20 +107,27 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func panelWillShow() {
+    func panelWillOpen() {
+        // Coming back to an answer that finished while the panel was closed must not start over.
+        let returningToAnswer = answerWaiting
         answerWaiting = false
-        if config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive, !isHandingOff,
-            Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
+        if returningToAnswer { lastActivity = Date() }
+        if !returningToAnswer, config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive,
+            !isHandingOff, Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
         {
             newConversation()
         }
-        focusRequest += 1
+        pruneOldAttachments()
         Task {
             let environment = await host.environment()
             GrokCredentials.prefetch(
                 environment: environment, grokHome: host.grokHome, grok: host.grokExecutable(in: environment))
             _ = try? await host.running()
         }
+    }
+
+    func focusInput() {
+        focusRequest += 1
     }
 
     func shutdown() {
@@ -134,7 +148,8 @@ final class AppModel: ObservableObject {
 
     // MARK: Conversation
 
-    func submit(_ text: String? = nil) {
+    /// `quiet`: the delegate is not told when it finishes (a hand-off, where the user has moved on to Ghostty).
+    func submit(_ text: String? = nil, quiet: Bool = false) {
         let typed = (text ?? input).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty || !attachments.isEmpty, !isHandingOff else { return }
         if voice.isActive { voice.cancel() }
@@ -149,6 +164,7 @@ final class AppModel: ObservableObject {
         stopRequested = false
         conversation.begin(query, attachments: attachments.map(\.label))
         attachments = []
+        attachmentGeneration += 1
         let turnID = conversation.turns.last?.id
         let conversationID = conversationID
         lastActivity = Date()
@@ -166,7 +182,7 @@ final class AppModel: ObservableObject {
                 guard conversation.turns.last?.id == turnID else { return }
                 conversation.finish(stopReason: result.stopReason, model: result.modelID)
                 host.refreshCatalog()
-                if let turn = conversation.turns.last, turn.state == .finished { onAnswerFinished?(turn) }
+                if !quiet, let turn = conversation.turns.last, turn.state == .finished { onAnswerFinished?(turn) }
             } catch {
                 guard conversation.turns.last?.id == turnID, !(error is CancellationError) else { return }
                 conversation.fail(error.localizedDescription)
@@ -195,6 +211,7 @@ final class AppModel: ObservableObject {
         sessionID = nil
         conversation = Conversation(paths: paths)
         attachments = []
+        attachmentGeneration += 1
         input = ""
         notice = nil
         lastActivity = Date()
@@ -333,7 +350,7 @@ final class AppModel: ObservableObject {
             continueInGhostty()
         } else {
             let task = text.isEmpty ? "Work from what I attached." : text
-            submit("Start a Grok Build dev session in Ghostty for this task:\n\n\(task)")
+            submit("Start a Grok Build dev session in Ghostty for this task:\n\n\(task)", quiet: true)
         }
     }
 

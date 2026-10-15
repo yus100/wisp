@@ -199,7 +199,7 @@ final class ControlServer {
         let keys: [String: (code: UInt16, characters: String)] = [
             "return": (36, "\r"), "enter": (76, "\u{3}"), "escape": (53, "\u{1b}"), "esc": (53, "\u{1b}"),
             "tab": (48, "\t"), "delete": (51, "\u{7f}"), "n": (45, "n"), "m": (46, "m"), ".": (47, "."),
-            "w": (13, "w"), "c": (8, "c"), "v": (9, "v"), "a": (0, "a"),
+            "w": (13, "w"), "c": (8, "c"), "v": (9, "v"), "a": (0, "a"), "o": (31, "o"),
             "down": (125, "\u{F701}"), "up": (126, "\u{F700}"),
         ]
         var modifiers: NSEvent.ModifierFlags = []
@@ -242,6 +242,7 @@ final class ControlServer {
             "isWorking": model.isWorking,
             "isHandingOff": model.isHandingOff,
             "answerWaiting": model.answerWaiting,
+            "choosingFiles": panel.picker != nil,
             "sessionId": model.sessionID ?? NSNull(),
             "notice": model.notice?.text ?? NSNull(),
             "model": model.modelLabel,

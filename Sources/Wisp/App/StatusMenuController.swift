@@ -27,22 +27,25 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// The sparkle, with a dot while an answer is waiting.
     private func showIcon(answerWaiting: Bool) {
         guard let sparkle = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Wisp") else { return }
-        let image =
-            answerWaiting
-            ? NSImage(size: sparkle.size, flipped: false) { rect in
-                sparkle.draw(in: rect)
-                let size = rect.width * 0.34
-                let dot = NSRect(x: rect.maxX - size, y: rect.maxY - size, width: size, height: size)
-                let gap = rect.width * 0.08
-                NSGraphicsContext.current?.compositingOperation = .clear
-                NSBezierPath(ovalIn: dot.insetBy(dx: -gap, dy: -gap)).fill()
-                NSGraphicsContext.current?.compositingOperation = .sourceOver
-                NSBezierPath(ovalIn: dot).fill()
-                return true
-            } : sparkle
+        let image = answerWaiting ? Self.badged(sparkle) : sparkle
         image.isTemplate = true
         image.accessibilityDescription = answerWaiting ? "Wisp, answer ready" : "Wisp"
         statusItem.button?.image = image
+    }
+
+    /// Nonisolated because AppKit may run an image's drawing handler on any thread.
+    private nonisolated static func badged(_ icon: NSImage) -> NSImage {
+        NSImage(size: icon.size, flipped: false) { rect in
+            icon.draw(in: rect)
+            let size = rect.width * 0.34
+            let dot = NSRect(x: rect.maxX - size, y: rect.maxY - size, width: size, height: size)
+            let gap = rect.width * 0.08
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dot.insetBy(dx: -gap, dy: -gap)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {

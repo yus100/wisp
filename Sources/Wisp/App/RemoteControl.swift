@@ -55,6 +55,7 @@ enum ControlClient {
         case "attach":
             guard !argument.isEmpty else { return fail("attach needs a file path") }
             argument = URL(filePath: argument).standardizedFileURL.path
+            guard FileManager.default.fileExists(atPath: argument) else { return fail("no such file: \(argument)") }
         case "voice-file":
             let staged = "\(UUID().uuidString).wav"
             do {

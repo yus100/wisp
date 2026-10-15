@@ -7,12 +7,11 @@ import WispCore
 @MainActor
 final class AnswerNotifier: NSObject, UNUserNotificationCenterDelegate {
     private let onOpen: @MainActor () -> Void
-    private var center: UNUserNotificationCenter { .current() }
 
     init(onOpen: @escaping @MainActor () -> Void) {
         self.onOpen = onOpen
         super.init()
-        center.delegate = self
+        UNUserNotificationCenter.current().delegate = self
     }
 
     func notify(_ turn: Turn) {

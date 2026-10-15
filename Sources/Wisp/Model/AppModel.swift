@@ -25,6 +25,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var isHandingOff = false
     /// Bumped whenever the input field should take focus.
     @Published private(set) var focusRequest = 0
+    /// Files, images, and window screenshots going with the next question.
+    @Published var attachments: [Attachment] = []
+    /// Slash commands grok accepts (built-ins, skills, workflows), cached between launches.
+    @Published var commands: [SlashCommand] = []
+    /// The highlighted row of the slash-command suggestions.
+    @Published var selectedSuggestion = 0
+    /// The app that was in front when the panel opened; "Attach Window" captures its window.
+    var contextApp: NSRunningApplication?
+    /// An answer finished; the delegate notifies if the panel is hidden.
+    var onAnswerFinished: ((Turn) -> Void)?
+    /// An answer finished while the panel was closed; cleared when it opens. Shown in the menu bar.
+    @Published var answerWaiting = false
 
     let voice = VoiceController()
     private(set) var history: SessionHistory
@@ -35,7 +47,7 @@ final class AppModel: ObservableObject {
 
     private let configStore: ConfigStore
     private let host: AgentHost
-    private let paths: WispPaths
+    let paths: WispPaths
     private var lastActivity = Date()
     private var promptTask: Task<Void, Never>?
     private var voiceBaseText = ""
@@ -53,6 +65,7 @@ final class AppModel: ObservableObject {
         host = AgentHost(config: configStore.config, paths: paths)
         conversation = Conversation(paths: paths)
         history = SessionHistory(file: paths.historyFile)
+        commands = Self.loadCommands(from: paths.commandsFile)
         host.onSessionUpdate = { [weak self] in self?.apply($0) }
         host.onCatalogChange = { [weak self] in self?.catalog = $0 }
         host.onUnexpectedExit = { [weak self] in self?.agentDied(status: $0) }
@@ -88,6 +101,7 @@ final class AppModel: ObservableObject {
     }
 
     func panelWillShow() {
+        answerWaiting = false
         if config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive, !isHandingOff,
             Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
         {
@@ -121,17 +135,20 @@ final class AppModel: ObservableObject {
     // MARK: Conversation
 
     func submit(_ text: String? = nil) {
-        let query = (text ?? input).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty, !isHandingOff else { return }
+        let typed = (text ?? input).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty || !attachments.isEmpty, !isHandingOff else { return }
         if voice.isActive { voice.cancel() }
         guard !isWorking else {
             notice = Notice("Still answering. Press ⌘. to stop it first.")
             return
         }
+        let query = typed.isEmpty ? "Take a look at what I attached." : typed
+        let prompt = PromptComposer.compose(typed, attachments: attachments)
         input = ""
         notice = nil
         stopRequested = false
-        conversation.begin(query)
+        conversation.begin(query, attachments: attachments.map(\.label))
+        attachments = []
         let turnID = conversation.turns.last?.id
         let conversationID = conversationID
         lastActivity = Date()
@@ -145,10 +162,11 @@ final class AppModel: ObservableObject {
                     conversation.finish(stopReason: "cancelled", model: nil)
                     return
                 }
-                let result = try await agent.prompt(query, in: session)
+                let result = try await agent.prompt(prompt, in: session)
                 guard conversation.turns.last?.id == turnID else { return }
                 conversation.finish(stopReason: result.stopReason, model: result.modelID)
                 host.refreshCatalog()
+                if let turn = conversation.turns.last, turn.state == .finished { onAnswerFinished?(turn) }
             } catch {
                 guard conversation.turns.last?.id == turnID, !(error is CancellationError) else { return }
                 conversation.fail(error.localizedDescription)
@@ -176,6 +194,7 @@ final class AppModel: ObservableObject {
         stopRequested = false
         sessionID = nil
         conversation = Conversation(paths: paths)
+        attachments = []
         input = ""
         notice = nil
         lastActivity = Date()
@@ -190,6 +209,11 @@ final class AppModel: ObservableObject {
     }
 
     private func apply(_ notification: SessionNotification) {
+        // Commands are the same for every session, and the list arrives before session/new returns.
+        if case .availableCommands(let list) = notification.update {
+            updateCommands(list)
+            return
+        }
         guard !ignoringUpdates, notification.sessionId == sessionID else { return }
         conversation.apply(notification.update)
     }
@@ -305,10 +329,11 @@ final class AppModel: ObservableObject {
     /// conversation continues as a full Grok Build session in Ghostty.
     func handOff() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty {
+        if text.isEmpty && attachments.isEmpty {
             continueInGhostty()
         } else {
-            submit("Start a Grok Build dev session in Ghostty for this task:\n\n\(text)")
+            let task = text.isEmpty ? "Work from what I attached." : text
+            submit("Start a Grok Build dev session in Ghostty for this task:\n\n\(task)")
         }
     }
 

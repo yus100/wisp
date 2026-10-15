@@ -28,6 +28,8 @@ public struct WispConfig: Codable, Equatable, Sendable {
     public var ghosttyTarget = GhosttyTarget.window
     /// Extra instructions appended to the quick-answer rules.
     public var extraRules = ""
+    /// Post a notification when an answer finishes while the panel is hidden.
+    public var notifyWhenDone = true
     /// Accept `Wisp ctl` commands. Off by default: when on, any process running as you can drive the
     /// always-approve agent and the microphone through Wisp's privacy permissions.
     public var remoteControl = false
@@ -48,6 +50,7 @@ public struct WispConfig: Codable, Equatable, Sendable {
         voicePauseSeconds = try container.decode(.voicePauseSeconds, default: defaults.voicePauseSeconds)
         ghosttyTarget = try container.decode(.ghosttyTarget, default: defaults.ghosttyTarget)
         extraRules = try container.decode(.extraRules, default: defaults.extraRules)
+        notifyWhenDone = try container.decode(.notifyWhenDone, default: defaults.notifyWhenDone)
         remoteControl = try container.decode(.remoteControl, default: defaults.remoteControl)
     }
 

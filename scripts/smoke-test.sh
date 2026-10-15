@@ -1,6 +1,6 @@
 #!/bin/bash
 # End-to-end check of the installed, running app: typing, a streamed answer, voice from a synthesized
-# WAV, model switching, and the panel keys. Costs a few model calls.
+# WAV, model switching, slash commands, attachments, and the panel keys. Costs a few model calls.
 #
 # Needs "remoteControl": true in ~/.config/wisp/config.json (Wisp ctl is off by default).
 set -euo pipefail
@@ -86,6 +86,27 @@ sleep 0.5
 "$CTL" ctl ask "reply with just: pong"
 wait_idle
 [ "$(field "d['turns'][-1]['model']")" = "$first_other" ] && pass "model switch applies mid-conversation ($first_other)" || fail "model: $(field "d['turns'][-1]")"
+
+# Slash commands come from grok (cached after the first session); Tab fills in the highlighted one.
+press cmd+n
+sleep 0.3
+"$CTL" ctl type "/session-in"
+sleep 0.3
+state
+[ "$(field "d['suggestions']")" = "['session-info']" ] && pass "/session-in suggests session-info" || fail "suggestions: $(field "d['suggestions']")"
+press tab
+press return
+wait_idle
+[[ "$(field "d['turns'][-1]['answer']")" == *[Ss]ession* ]] && pass "/session-info runs from the suggestion" || fail "/session-info: $(field "d['turns'][-1]")"
+
+# Attachments reach the agent as paths it reads with its own tools.
+echo "The codeword is marmalade." >"$OUT/note.txt"
+press cmd+n
+"$CTL" ctl attach "$OUT/note.txt"
+"$CTL" ctl ask "What is the codeword in the attached note? Reply with only the word."
+wait_idle
+[[ "$(field "d['turns'][-1]['answer']")" == *[Mm]armalade* ]] && pass "agent reads an attached file" || fail "attachment: $(field "d['turns'][-1]")"
+[ "$(field "d['turns'][-1]['attachments']")" = "['note.txt']" ] && pass "the turn lists its attachment" || fail "turn attachments: $(field "d['turns'][-1]['attachments']")"
 
 press shift+return
 "$CTL" ctl type "x"

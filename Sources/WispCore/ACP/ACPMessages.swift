@@ -199,6 +199,8 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
     case toolCall(ToolCall)
     case toolCallUpdate(ToolCallUpdate)
     case retry(RetryState)
+    /// The slash commands the session accepts: built-ins, skills, and saved workflows.
+    case availableCommands([SlashCommand])
     case other(String)
 
     public init(from decoder: Decoder) throws {
@@ -216,6 +218,9 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
             self = .toolCallUpdate(try single.decode(ToolCallUpdate.self))
         case "retry_state":
             self = .retry(try single.decode(RetryState.self))
+        case "available_commands_update":
+            let commands = (try? container.decode([LenientCommand].self, forKey: .availableCommands)) ?? []
+            self = .availableCommands(commands.compactMap(\.command))
         default:
             self = .other(kind)
         }
@@ -225,8 +230,17 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
         let text: String?
     }
 
+    /// One malformed entry must not drop the whole list.
+    private struct LenientCommand: Decodable {
+        let command: SlashCommand?
+
+        init(from decoder: Decoder) throws {
+            command = try? SlashCommand(from: decoder)
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case sessionUpdate, content
+        case sessionUpdate, content, availableCommands
     }
 }
 

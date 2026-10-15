@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ServiceManagement
 import WispCore
 
@@ -9,23 +10,48 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let showPanel: @MainActor () -> Void
     private let startVoice: @MainActor () -> Void
+    private var answerWaiting: AnyCancellable?
 
     init(model: AppModel, showPanel: @escaping @MainActor () -> Void, startVoice: @escaping @MainActor () -> Void) {
         self.model = model
         self.showPanel = showPanel
         self.startVoice = startVoice
         super.init()
-        statusItem.button?.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Wisp")
-        statusItem.button?.image?.isTemplate = true
+        answerWaiting = model.$answerWaiting.sink { [weak self] waiting in self?.showIcon(answerWaiting: waiting) }
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
         statusItem.menu = menu
     }
 
+    /// The sparkle, with a dot while an answer is waiting.
+    private func showIcon(answerWaiting: Bool) {
+        guard let sparkle = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Wisp") else { return }
+        let image =
+            answerWaiting
+            ? NSImage(size: sparkle.size, flipped: false) { rect in
+                sparkle.draw(in: rect)
+                let size = rect.width * 0.34
+                let dot = NSRect(x: rect.maxX - size, y: rect.maxY - size, width: size, height: size)
+                let gap = rect.width * 0.08
+                NSGraphicsContext.current?.compositingOperation = .clear
+                NSBezierPath(ovalIn: dot.insetBy(dx: -gap, dy: -gap)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                NSBezierPath(ovalIn: dot).fill()
+                return true
+            } : sparkle
+        image.isTemplate = true
+        image.accessibilityDescription = answerWaiting ? "Wisp, answer ready" : "Wisp"
+        statusItem.button?.image = image
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let config = model.config
+        if model.answerWaiting {
+            menu.addItem(ActionItem(title: "Show Answer", handler: showPanel))
+            menu.addItem(.separator())
+        }
         menu.addItem(ActionItem(title: "Ask Anything   \(HotkeySpec.display(config.hotkey)) (hold to talk)", handler: showPanel))
         menu.addItem(ActionItem(title: "Voice   \(HotkeySpec.display(config.voiceHotkey))", handler: startVoice))
         menu.addItem(

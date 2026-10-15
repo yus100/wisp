@@ -26,10 +26,21 @@ Tap **⌥ Space** from anywhere. Type or say what you need. Wisp answers with an
 
 - **Instant.** The agent stays warm in the background, so answers start streaming in a second or two.
 - **Knows your machine.** It reads files, runs commands, and searches the web. No pasting context into a chat window.
+- **Show it what you see.** ⌘ ⇧ A attaches the window you were just in. Paste or drop files and images too.
 - **Talk to it.** Hold ⌥ Space and speak; let go to send. Or go hands-free with ⌥ ⇧ Space.
+- **Your skills, one slash away.** Type `/` for Grok Build's commands, skills, and workflows.
+- **Ask and walk away.** Close the panel mid-answer; a dot on the menu bar icon tells you it's ready.
 - **Grows into real work.** One keystroke moves the conversation, context and all, into a coding session in [Ghostty](https://ghostty.org).
 - **Any model.** Grok, Claude, GPT: whatever your Grok Build setup offers. Switch with ⌘ M.
 - **Native and light.** A small Swift app that lives in the menu bar. No Electron, no browser tab, no new account.
+
+## Bring your context
+
+<p align="center">
+  <img src="docs/assets/context.png" width="820" alt="Wisp with a Safari window and a PDF attached, suggesting slash commands">
+</p>
+
+Open Wisp over the app you're stuck in and press **⌘ ⇧ A**: the window goes along as a screenshot. Copied files, pasted images, and anything dropped on the panel come too. The agent opens them with its own tools, so it works with any model. Type `/` to run a skill or workflow on all of it.
 
 ## From a question to a coding session
 
@@ -48,7 +59,7 @@ git clone https://github.com/yus100/wisp.git
 cd wisp && make install
 ```
 
-Then tap **⌥ Space**. macOS asks for the microphone and folder access the first time Wisp needs them.
+Then tap **⌥ Space**. macOS asks for the microphone, folder access, and Screen Recording (for attaching windows) the first time Wisp needs each.
 
 ## Shortcuts
 
@@ -58,6 +69,9 @@ Then tap **⌥ Space**. macOS asks for the microphone and folder access the firs
 | **⌥ Space**, hold | Talk; release to send |
 | **⌥ ⇧ Space** | Hands-free voice |
 | **↩** | Send (follow-ups keep the context) |
+| **⌘ ⇧ A** | Attach the window you were in |
+| **⌘ V** | Paste text, or attach copied files and images |
+| **/** | Commands, skills, and workflows; **Tab** fills one in |
 | **⌘ ↩** | Continue in Ghostty, or start a dev session for what you typed |
 | **⌘ M** | Pick the model and reasoning effort |
 | **⌘ N** | New conversation |
@@ -73,7 +87,7 @@ More in [architecture](docs/architecture.md).
 
 ## Privacy
 
-Wisp itself collects nothing. Conversations go through Grok Build like any other session, and audio is streamed for transcription only while you dictate. The agent acts with your permissions and doesn't ask before running commands, which is what makes it useful; the [guide](docs/guide.md#privacy-and-safety) covers what that means and how macOS permissions apply.
+Wisp itself collects nothing. Conversations go through Grok Build like any other session, and audio is streamed for transcription only while you dictate. Windows are captured only when you attach one, and Wisp deletes its screenshots and pasted images after a week. The agent acts with your permissions and doesn't ask before running commands, which is what makes it useful; the [guide](docs/guide.md#privacy-and-safety) covers what that means and how macOS permissions apply.
 
 ## Contributing
 

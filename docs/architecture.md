@@ -16,18 +16,20 @@ Sources/WispCore/
   ACP/            LineFramer, JSON-RPC envelopes, ACPConnection (actor), typed ACP messages
   Agent/          GrokAgent (process + session API), ModelCatalog, QuickAnswerRules
   Conversation/   Conversation (update reducer), SessionHistory, GrokSessionStore
+  Context/        Attachment, PromptComposer, SlashCommand
   Voice/          SpeechToText, TranscriptAssembler, RecordedAudio, GrokCredentials
   Ghostty/        GhosttyLauncher
   Config/         WispConfig, HotkeySpec
   Markdown/       MarkdownBlock parser
-  Support/        Log, WispPaths, ProcessRunner, ShellEnvironment, withDeadline
+  Support/        Log, WispPaths, ProcessRunner, ShellEnvironment, TextPreview, withDeadline
 Sources/Wisp/
   App/            main, AppDelegate, ConfigStore, HotkeyController, StatusMenuController, RemoteControl, MainMenu,
-                  Screenshots (renders the README images)
-  Model/          AppModel (coordinator), AgentHost (agent lifecycle)
+                  AnswerNotifier, Screenshots (renders the README images)
+  Model/          AppModel (coordinator, +Context for attachments and commands), AgentHost (agent lifecycle),
+                  WindowCapture
   Voice/          VoiceController, MicrophoneCapture
   Panel/          PanelController (+Testing), ModelMenu
-  Views/          PanelView, InputBar, ConversationView, MarkdownView, FooterView
+  Views/          PanelView, InputBar, ContextViews, ConversationView, MarkdownView, FooterView
 Resources/        Info.plist, ghostty-grok, AppIcon.icns
 docs/assets/      README images (make icon, make screenshots)
 ```
@@ -58,6 +60,18 @@ docs/assets/      README images (make icon, make screenshots)
 - ⌘. before the turn's session exists is remembered and applied as soon as it does.
 - `session/load` replays the session's history as updates. Re-attaching ignores updates until the load returns (they all arrive before its reply), and follow-up questions wait for the re-attach to finish.
 
+## Attachments and slash commands
+
+- **Attachments travel as paths.** `PromptComposer` appends one line per attachment to the question, telling the agent to open it with its file tools; grok's tools read text and view images. That works with every model and needs nothing from ACP beyond text. The turn keeps only the labels, for display.
+- **Attach Window.** The panel never activates Wisp, so when it opens, the frontmost app is still the one the user was in; `PanelController.show` records it. `WindowCapture` finds that app's front normal window with `CGWindowListCopyWindowInfo` (IDs and owners are readable without permission), matches it in `SCShareableContent`, and captures just that window with `SCScreenshotManager`. Without Screen Recording permission it asks once and shows a notice with **Open Settings**.
+- **Saved files.** Window screenshots and pasted images go to `~/Library/Caches/Wisp/attachments`; files older than a week are removed at launch. Pasted and dropped files are referenced where they are.
+- **Slash commands.** grok sends `available_commands_update` after `session/new`: built-ins, skills, and workflows. Wisp decodes it leniently (a malformed entry is dropped, not the list), keeps the latest list in `commands.json` so suggestions work before the next session exists, and ranks matches in `SlashCommand.suggestions` (name prefix, then name, then description). Running one is just sending its text as the prompt.
+- **Silent commands.** Built-ins that open a view in grok's terminal UI (`/context`, `/memory`) finish over ACP without a word. `Conversation.finish` gives such a turn a notice that points to the Ghostty hand-off.
+
+## Answers in the background
+
+`AppModel.onAnswerFinished` fires when a turn finishes. If the panel is hidden, `AppDelegate` sets `answerWaiting`, which puts a dot on the menu bar icon and **Show Answer** in its menu until the panel opens, and asks `AnswerNotifier` to post a notification (`notifyWhenDone`). UserNotifications calls back on its own queues, so posting runs off the main actor. macOS generally refuses notifications from ad-hoc-signed apps, which is why the dot exists; `make install SIGN_IDENTITY=…` signs with a real certificate.
+
 ## Voice
 
 ```
@@ -86,7 +100,7 @@ MicrophoneCapture ──AsyncStream<Data>──▶ SpeechToText.transcribe ─�
 
 ## Panel
 
-`WispPanel` is a borderless, non-activating `NSPanel`: it takes keyboard focus while the app you were using stays frontmost, and it hides when you click elsewhere (hands-free dictation keeps running). SwiftUI reports the content height and `PanelController` resizes the window on the next run-loop turn, keeping the top edge fixed; resizing inside a layout pass leaves the frame and content out of sync. A local key monitor handles the panel shortcuts, leaves Return alone while an input method is composing, and a hidden main menu supplies the standard editing shortcuts.
+`WispPanel` is a borderless, non-activating `NSPanel`: it takes keyboard focus while the app you were using stays frontmost, and it hides when you click elsewhere. Three cases keep it up: hands-free dictation; the file picker, which activates Wisp (hiding then hands focus back to the app you came from); and a click that may start a drag from another app, which waits for the mouse-up so a drop can land (a drop makes the panel key again). SwiftUI reports the content height and `PanelController` resizes the window on the next run-loop turn, keeping the top edge fixed; resizing inside a layout pass leaves the frame and content out of sync. A local key monitor handles the panel shortcuts, leaves Return alone while an input method is composing, and a hidden main menu supplies the standard editing shortcuts.
 
 ## Configuration and state
 
@@ -94,6 +108,8 @@ MicrophoneCapture ──AsyncStream<Data>──▶ SpeechToText.transcribe ─�
 | --- | --- |
 | Settings | `~/.config/wisp/config.json`, watched with dispatch sources and applied live. Reloads are read-only (a file briefly missing mid-save changes nothing), a file with errors is never overwritten, and saves go through a symlinked config to its target |
 | Recent conversations | `~/Library/Application Support/Wisp/history.json`; titles come from grok's `summary.json` |
+| Slash commands | `~/Library/Application Support/Wisp/commands.json`, the last list grok sent |
+| Attachments | `~/Library/Caches/Wisp/attachments`: window screenshots and pasted images, kept a week |
 | Logs | `~/Library/Logs/Wisp/app.log` (Wisp) and `agent.log` (grok's stderr); each starts afresh past 5 MB, checked at launch and agent start |
 | Sessions | Wherever grok keeps them (`~/.grok/sessions`), like any other Grok Build session |
 

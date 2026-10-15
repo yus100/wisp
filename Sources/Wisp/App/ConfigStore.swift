@@ -9,7 +9,7 @@ final class ConfigStore {
     private(set) var problem: String?
 
     /// Called after any change, from disk or from `update`, with the previous and new config.
-    var onChange: ((_ old: WispConfig, _ new: WispConfig, _ fromDisk: Bool) -> Void)?
+    var onChange: ((_ old: WispConfig, _ new: WispConfig) -> Void)?
     /// Called when the file on disk stops parsing.
     var onReloadProblem: ((_ problem: String) -> Void)?
 
@@ -34,7 +34,7 @@ final class ConfigStore {
         try updated.save(to: file)
         let old = config
         config = updated
-        onChange?(old, updated, false)
+        onChange?(old, updated)
     }
 
     struct ConfigError: LocalizedError {
@@ -57,7 +57,7 @@ final class ConfigStore {
             guard loaded != config else { return }
             let old = config
             config = loaded
-            onChange?(old, loaded, true)
+            onChange?(old, loaded)
         }
     }
 

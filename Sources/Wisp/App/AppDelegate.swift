@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startVoice: { [weak self] in self?.toggleVoice() })
         control = ControlServer(model: model, panel: panel) { [weak self] in self?.configStore.config.remoteControl ?? false }
 
-        configStore.onChange = { [weak self] old, new, fromDisk in self?.configChanged(from: old, to: new, fromDisk: fromDisk) }
+        configStore.onChange = { [weak self] old, new in self?.configChanged(from: old, to: new) }
         configStore.onReloadProblem = { [weak self] problem in self?.model.notice = Notice(problem) }
         hotkeys.onMainKey = { [weak self] in self?.mainKey($0) }
         hotkeys.onVoiceKey = { [weak self] in self?.toggleVoice() }
@@ -100,17 +100,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Config
 
-    private func configChanged(from old: WispConfig, to new: WispConfig, fromDisk: Bool) {
+    /// Changes apply at once, so only problems get a notice.
+    private func configChanged(from old: WispConfig, to new: WispConfig) {
         model.configDidChange(from: old, to: new)
-        var problem: String?
-        if old.hotkey != new.hotkey || old.voiceHotkey != new.voiceHotkey {
-            problem = registerHotkeys()
+        if old.hotkey != new.hotkey || old.voiceHotkey != new.voiceHotkey, let problem = registerHotkeys() {
+            model.notice = Notice(problem)
         }
-        if old.launchAtLogin != new.launchAtLogin, let loginProblem = LoginItem.apply(new.launchAtLogin) {
-            model.notice = loginProblem
-            return
+        if old.launchAtLogin != new.launchAtLogin, let problem = LoginItem.apply(new.launchAtLogin) {
+            model.notice = problem
         }
-        if fromDisk { model.notice = Notice(problem ?? "Config reloaded.") }
     }
 
     /// `kill` and `make install` send SIGTERM; route it through a normal quit so the agent stops too.

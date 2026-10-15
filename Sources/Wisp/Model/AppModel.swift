@@ -81,7 +81,7 @@ final class AppModel: ObservableObject {
             newConversation()
         }
         voice.language = new.voiceLanguage
-        voice.silenceSeconds = new.voiceSilenceSeconds
+        voice.pauseSeconds = new.voicePauseSeconds
         if old.model != new.model || old.reasoningEffort != new.reasoningEffort {
             applyModelSettingsToSession()
         }
@@ -396,7 +396,7 @@ final class AppModel: ObservableObject {
 
     private func configureVoice() {
         voice.language = config.voiceLanguage
-        voice.silenceSeconds = config.voiceSilenceSeconds
+        voice.pauseSeconds = config.voicePauseSeconds
         voice.credentials = { [weak self] in
             guard let self else { throw CancellationError() }
             let environment = await host.environment()

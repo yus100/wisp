@@ -54,7 +54,9 @@ enum ControlClient {
         case "voice-file":
             let staged = "\(UUID().uuidString).wav"
             do {
-                try FileManager.default.copyItem(at: URL(filePath: argument), to: RemoteControl.exchange.appending(path: staged))
+                // Write a fresh file (copying would keep the source's old modification date, and Wisp
+                // clears exchange files older than a minute).
+                try Data(contentsOf: URL(filePath: argument)).write(to: RemoteControl.exchange.appending(path: staged))
             } catch {
                 return fail("cannot read \(argument): \(error.localizedDescription)")
             }

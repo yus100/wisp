@@ -60,6 +60,26 @@ query="$(field "d['turns'][-1]['query']")"
 [[ "$query" == *[Tt]imes* ]] && pass "voice transcript sent: $query" || fail "voice query: $query"
 [[ "$(field "d['turns'][-1]['answer']")" == *84* ]] && pass "follow-up keeps context" || fail "follow-up: $(field "d['turns'][-1]")"
 
+# Issue #1: a thinking pause must not end a hands-free dictation; quiet afterwards sends it.
+say -o "$OUT/part1.wav" --data-format=LEI16@16000 "Remember the word pineapple."
+say -o "$OUT/part2.wav" --data-format=LEI16@16000 "And also the word volcano."
+python3 - "$OUT" <<'PY'
+import struct, sys
+out = sys.argv[1]
+def pcm(path):
+    data = open(path, "rb").read()
+    return data[data.index(b"data") + 8:]
+body = pcm(f"{out}/part1.wav") + b"\0\0" * 32000 + pcm(f"{out}/part2.wav") + b"\0\0" * 96000  # 2 s pause, 6 s quiet
+header = b"RIFF" + struct.pack("<I", 36 + len(body)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 16000, 32000, 2, 16)
+open(f"{out}/paused.wav", "wb").write(header + b"data" + struct.pack("<I", len(body)) + body)
+PY
+press cmd+n
+sleep 0.3
+"$CTL" ctl voice-file "$OUT/paused.wav"
+wait_idle
+query="$(field "d['turns'][-1]['query']")"
+[[ "$query" == *[Pp]ineapple* && "$query" == *[Vv]olcano* ]] && pass "a 2 s pause does not cut a dictation short" || fail "paused dictation sent: $query"
+
 first_other="$(field "[m for m in d['models'] if m != '$original_model'][0]")"
 "$CTL" ctl model "$first_other"
 sleep 0.5

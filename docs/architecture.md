@@ -22,12 +22,14 @@ Sources/WispCore/
   Markdown/       MarkdownBlock parser
   Support/        Log, WispPaths, ProcessRunner, ShellEnvironment, withDeadline
 Sources/Wisp/
-  App/            main, AppDelegate, ConfigStore, HotkeyController, StatusMenuController, RemoteControl, MainMenu
+  App/            main, AppDelegate, ConfigStore, HotkeyController, StatusMenuController, RemoteControl, MainMenu,
+                  Screenshots (renders the README images)
   Model/          AppModel (coordinator), AgentHost (agent lifecycle)
   Voice/          VoiceController, MicrophoneCapture
   Panel/          PanelController (+Testing), ModelMenu
   Views/          PanelView, InputBar, ConversationView, MarkdownView, FooterView
 Resources/        Info.plist, ghostty-grok, AppIcon.icns
+docs/assets/      README images (make icon, make screenshots)
 ```
 
 ## A question, end to end

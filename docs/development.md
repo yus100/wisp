@@ -9,7 +9,8 @@
 | `make test` | Unit tests (`swift test`), about a second |
 | `make lint` / `make format` | Check or apply `swift format` (config in `.swift-format`) |
 | `make smoke` | End-to-end check against the installed, running app |
-| `make icon` | Redraw `Resources/AppIcon.icns` from `scripts/make-icon.swift` |
+| `make icon` | Redraw `Resources/AppIcon.icns` and `docs/assets/icon.png` from `scripts/make-icon.swift` |
+| `make screenshots` | Render the README images in `docs/assets` from sample data, offscreen, with the real panel views |
 
 Everything builds with the Xcode Command Line Tools; Xcode itself is not needed. The package targets macOS 14 and Swift 6 language mode.
 

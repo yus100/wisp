@@ -1,6 +1,6 @@
 # Wisp guide
 
-Everything beyond the [README](../README.md): shortcuts, voice, coding sessions, settings, privacy, and fixes.
+Everything beyond the [README](../README.md): shortcuts, attachments, slash commands, voice, coding sessions, settings, privacy, and fixes.
 
 ## Shortcuts
 
@@ -12,6 +12,9 @@ Everything beyond the [README](../README.md): shortcuts, voice, coding sessions,
 | **↩** | Send. Follow-ups stay in the same conversation |
 | **⇧ ↩** or **⌥ ↩** | New line |
 | **⌘ ↩** | Continue this conversation in Ghostty. With text typed, start a dev session for it instead |
+| **⌘ ⇧ A** | Attach a screenshot of the window you were in when you opened Wisp |
+| **⌘ V** | Paste text; copied files and images become attachments |
+| **↑ ↓**, **Tab** | Move through the `/` suggestions and fill one in (**↩** does too) |
 | **⌘ M** | Choose the model and reasoning effort (or click the model chip) |
 | **⌘ N** | New conversation |
 | **⌘ .** | Stop the answer |
@@ -19,7 +22,23 @@ Everything beyond the [README](../README.md): shortcuts, voice, coding sessions,
 | **⌘ ,** | Edit the settings file |
 | **esc** | Close, or stop listening |
 
-A conversation survives closing the panel. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
+A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
+
+## Attachments
+
+Anything attached goes with your next question, shown as chips under the input. Remove one with its **×**.
+
+- **The window you were in.** Wisp remembers which app was in front when you opened it. **⌘ ⇧ A**, or **Attach *App* Window** in the paperclip menu, saves a screenshot of that app's front window. The first time, macOS asks for Screen Recording permission; turn Wisp on in System Settings and reopen it.
+- **Files and folders.** Copy them in Finder and press **⌘ V** in Wisp, choose them with **Choose Files…** in the paperclip menu, or drag them onto the panel.
+- **Images.** Paste an image (a screenshot copied with ⌃ ⇧ ⌘ 4, say) with **⌘ V**.
+
+Wisp sends the paths, and the agent opens the files with its own tools, so attachments work with every model. Screenshots and pasted images are saved in `~/Library/Caches/Wisp/attachments` and deleted after a week. **⌘ ↩** with only attachments starts a dev session about them.
+
+## Slash commands
+
+Type `/` to see Grok Build's commands, your skills, and your workflows, with the best matches first. **Tab** or **↩** fills in the highlighted one, ready for arguments; **↩** again runs it. The list comes from Grok Build with each new conversation and is cached, so on a fresh install it appears after your first question.
+
+Commands that only open a view in Grok Build's terminal UI, such as `/context` and `/memory`, have no output in Wisp. Wisp says so; **⌘ ↩** opens the conversation in Ghostty, where they work.
 
 ## Voice
 
@@ -55,6 +74,7 @@ Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dic
 | `ghosttyTarget` | `window` | Open sessions in a new `window` or a new `tab` of the front window |
 | `grokPath` | `""` | Path to `grok`; empty searches your login shell's PATH |
 | `extraRules` | `""` | Extra instructions for the quick-answer agent |
+| `notifyWhenDone` | `true` | Post a notification when an answer finishes while the panel is closed |
 | `remoteControl` | `false` | Accept `Wisp ctl` commands beyond show and hide (see [Scripting](#scripting)) |
 
 Hotkeys combine `cmd`, `option`, `ctrl`, and `shift` with a key such as `space`, `k`, `return`, or `f5`. When Wisp can't register one, the panel says so.
@@ -63,9 +83,14 @@ Hotkeys combine `cmd`, `option`, `ctrl`, and `shift` with a key such as `space`,
 
 - **The agent can do anything you can.** Quick answers run Grok Build with always-approve in your home folder: it reads, writes, and runs commands without asking. Treat what you paste into it, and pages it reads, as you would in any always-approve session.
 - **Wisp collects nothing.** Conversations are Grok Build sessions, stored and handled like any other. Audio is sent for transcription only while you dictate.
-- **macOS asks once per kind of access:** the microphone, protected folders (Documents, Desktop, Downloads, other apps' data), and control of Ghostty. Full Disk Access removes the folder prompts but also gives that access to anything the agent is talked into doing, so leave it off unless the prompts get in your way.
+- **Screenshots are taken only when you ask.** Attaching a window captures that one window, once. Screen Recording permission lets Wisp do this, and macOS may remind you about it from time to time.
+- **macOS asks once per kind of access:** the microphone, protected folders (Documents, Desktop, Downloads, other apps' data), Screen Recording, and control of Ghostty. Full Disk Access removes the folder prompts but also gives that access to anything the agent is talked into doing, so leave it off unless the prompts get in your way.
 - **Signing.** `make app` signs ad hoc with a requirement on the bundle ID, so your permissions survive rebuilds. The trade-off: another ad-hoc app claiming `com.yus100.wisp` would match them too. Sign with your own certificate if that matters to you.
 - **Remote control is off by default.** See [Scripting](#scripting).
+
+### Notifications
+
+macOS usually refuses notifications from ad-hoc-signed apps without asking, so a plain `make install` gets only the menu bar dot. With an Apple Development or Developer ID certificate (`security find-identity -v -p codesigning` lists yours), build with `make install SIGN_IDENTITY="Apple Development: …"` and macOS asks to allow notifications the first time an answer finishes in the background.
 
 ## Scripting
 
@@ -75,6 +100,7 @@ The app binary doubles as a remote control for the running copy:
 WISP=~/Applications/Wisp.app/Contents/MacOS/Wisp
 $WISP ctl toggle                    # show, hide, toggle: always available
 $WISP ctl ask "summarize the newest file in my Downloads"
+$WISP ctl attach ~/Desktop/plan.pdf     # goes with the next question
 $WISP ctl state /tmp/state.json     # the panel's state as JSON
 $WISP ctl help                      # every command
 ```
@@ -89,4 +115,6 @@ Everything except show, hide, and toggle needs `"remoteControl": true`, because 
 | "Could not find the grok CLI" | Install [Grok Build](https://x.ai/cli), or set `grokPath` |
 | Voice says it needs a login | Run `grok login` in a terminal |
 | "Wisp is not allowed to control Ghostty" | Click **Open Settings** in the notice and turn on Ghostty under Wisp |
+| Attaching a window says it needs Screen Recording | Click **Open Settings** in the notice, turn on Wisp, then quit and reopen Wisp; macOS applies the permission on the next launch |
+| No `/` suggestions | Ask one question first; the list arrives with the first conversation |
 | Anything else | **Show Logs** in the menu: `app.log` is Wisp, `agent.log` is the agent's output |

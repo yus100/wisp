@@ -111,6 +111,7 @@ final class AppModel: ObservableObject {
         // Coming back to an answer that finished while the panel was closed must not start over.
         let returningToAnswer = answerWaiting
         answerWaiting = false
+        if returningToAnswer { lastActivity = Date() }
         if !returningToAnswer, config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive,
             !isHandingOff, Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
         {

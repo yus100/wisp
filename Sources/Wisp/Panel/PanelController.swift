@@ -33,7 +33,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var pendingHeight: CGFloat?
     /// The open file picker; it takes focus without dismissing the panel.
     private(set) var picker: NSOpenPanel?
-    private var pickerEndsOnDeactivate: NSObjectProtocol?
+    /// The user moved to another app with the picker open, so it was cancelled.
+    private var pickerAbandoned = false
     private var mouseUpMonitor: Any?
     /// The app most recently in front other than Wisp: what "Attach Window" captures, and where focus
     /// goes back to when Wisp itself was active.
@@ -83,7 +84,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             hostingView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
         ])
         panel.contentView = effectView
-        model.onRequestHide = { [weak self] in self?.hide() }
+        // The hand-off is bringing Ghostty forward; leave focus to it.
+        model.onRequestHide = { [weak self] in self?.hide(returnFocus: false) }
         if previousApp?.bundleIdentifier == Bundle.main.bundleIdentifier { previousApp = nil }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
@@ -91,7 +93,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                 app.bundleIdentifier != Bundle.main.bundleIdentifier
             else { return }
-            MainActor.assumeIsolated { self?.previousApp = app }
+            MainActor.assumeIsolated { self?.otherAppActivated(app) }
         }
     }
 
@@ -122,14 +124,26 @@ final class PanelController: NSObject, NSWindowDelegate {
         model.focusInput()
     }
 
-    /// `returnFocus`: when Wisp itself is the active app (after the file picker or a notification click),
-    /// hand focus back to the previous app. Not wanted when the user is already moving to another app.
+    /// `returnFocus`: when Wisp itself is the frontmost app (after the file picker or a notification
+    /// click), hand focus back to the previous app. Not wanted when another app is already taking over.
     func hide(returnFocus: Bool = true) {
         if model.voice.isActive, model.voice.mode == .pushToTalk { model.voice.cancel() }
         panel.orderOut(nil)
         removeKeyMonitor()
         stopWaitingForMouseUp()
-        if returnFocus, NSApp.isActive, let app = previousApp, !app.isTerminated { app.activate() }
+        // NSApp.isActive can read true while only the non-activating panel is key; ask the workspace.
+        let wispInFront = NSWorkspace.shared.frontmostApplication == NSRunningApplication.current
+        if returnFocus, wispInFront, let app = previousApp, !app.isTerminated { app.activate() }
+    }
+
+    private func otherAppActivated(_ app: NSRunningApplication) {
+        previousApp = app
+        // Switching to another app abandons an open picker (left open, it would float there, pending).
+        // Only regular apps count, so a system prompt shown while browsing does not close it.
+        if let picker, app.activationPolicy == .regular {
+            pickerAbandoned = true
+            picker.cancel(nil)
+        }
     }
 
     func toggle() {
@@ -250,7 +264,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         case "m": DispatchQueue.main.async { self.showModelMenu() }  // the menu runs its own event loop
         case ",":
             NSWorkspace.shared.open(WispPaths.standard.configFile)
-            hide()
+            hide(returnFocus: false)
         case "c" where flags.contains(.shift): model.copyLastAnswer()
         case "a" where flags.contains(.shift): model.attachContextWindow()
         case "o": chooseFiles()
@@ -321,20 +335,13 @@ final class PanelController: NSObject, NSWindowDelegate {
         picker.prompt = "Attach"
         picker.level = .modalPanel  // above the floating panel
         self.picker = picker
-        // Clicking another app only hides an open panel, leaving it pending; end it as a click elsewhere would.
-        pickerEndsOnDeactivate = NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.picker?.cancel(nil) }
-        }
+        pickerAbandoned = false
         NSApp.activate()
         picker.begin { [weak self] response in
             guard let self else { return }
-            if let pickerEndsOnDeactivate { NotificationCenter.default.removeObserver(pickerEndsOnDeactivate) }
-            pickerEndsOnDeactivate = nil
             self.picker = nil
             if response == .OK { model.attach(files: picker.urls) }
-            if NSApp.isActive { show() } else { hide(returnFocus: false) }
+            if pickerAbandoned { hide(returnFocus: false) } else { show() }
         }
     }
 

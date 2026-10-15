@@ -23,7 +23,7 @@ Everything beyond the [README](../README.md): shortcuts, attachments, slash comm
 | **⌘ ,** | Edit the settings file |
 | **esc** | Close, or stop listening |
 
-A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). Coming back to that answer never triggers the idle reset below. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
+A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). Coming back to that answer restarts the idle timer below instead of starting fresh. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
 
 ## Attachments
 

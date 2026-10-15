@@ -83,15 +83,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Ask, close the panel, and get a notification when the answer is ready; clicking it reopens the panel.
+    /// Ask, close the panel, and find out when the answer is ready: a dot on the menu bar icon, and a
+    /// notification (clicking it reopens the panel) when macOS allows them.
     private func notifyWhenAnswersFinishInBackground() {
         // Notifications need an app bundle; a bare `swift run` binary has none.
-        guard Bundle.main.bundleIdentifier != nil else { return }
-        let notifier = AnswerNotifier { [weak self] in self?.panel.show() }
-        self.notifier = notifier
+        if Bundle.main.bundleIdentifier != nil {
+            notifier = AnswerNotifier { [weak self] in self?.panel.show() }
+        }
         model.onAnswerFinished = { [weak self] turn in
-            guard let self, !panel.isVisible, configStore.config.notifyWhenDone else { return }
-            notifier.notify(turn)
+            guard let self, !panel.isVisible else { return }
+            model.answerWaiting = true
+            if configStore.config.notifyWhenDone { notifier?.notify(turn) }
         }
     }
 

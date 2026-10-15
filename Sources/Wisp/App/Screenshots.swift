@@ -11,7 +11,12 @@ enum Screenshots {
         app.appearance = NSAppearance(named: .darkAqua)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            for (name, sample) in [("panel.png", diskSpace), ("handoff.png", devSession)] {
+            let samples: [(String, Sample)] = [
+                ("panel.png", .init(conversation: diskSpace)),
+                ("handoff.png", .init(conversation: devSession)),
+                ("context.png", .init(conversation: { Conversation(paths: $0) }, compose: researchWithContext)),
+            ]
+            for (name, sample) in samples {
                 let file = directory.appending(path: name)
                 try render(sample).write(to: file)
                 print("Wrote \(file.path)")
@@ -27,7 +32,13 @@ enum Screenshots {
         var errorDescription: String? { "the panel did not lay out" }
     }
 
-    private static func render(_ sample: (WispPaths) -> Conversation) throws -> Data {
+    private struct Sample {
+        var conversation: (WispPaths) -> Conversation
+        /// Fills in the input row: typed text, attachments, slash commands.
+        var compose: (AppModel) -> Void = { _ in }
+    }
+
+    private static func render(_ sample: Sample) throws -> Data {
         let scratch = FileManager.default.temporaryDirectory.appending(path: "wisp-screenshots-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: scratch) }
         let paths = WispPaths(home: scratch)
@@ -37,7 +48,9 @@ enum Screenshots {
         try config.save(to: paths.configFile)
 
         let model = AppModel(configStore: ConfigStore(file: paths.configFile), paths: paths)
-        model.showSample(sample(paths), catalog: ModelCatalog(models: [.init(id: "grok-4-fast", name: "Grok 4 Fast")]))
+        model.showSample(
+            sample.conversation(paths), catalog: ModelCatalog(models: [.init(id: "grok-4-fast", name: "Grok 4 Fast")]))
+        sample.compose(model)
         let panel = PanelController(model: model)
         panel.hostingView.appearance = NSAppearance(named: .darkAqua)
         panel.layOutOffscreen(maxConversationHeight: 600)
@@ -83,6 +96,21 @@ enum Screenshots {
                     + "to the header that follows the system setting and remembers the choice."))
         conversation.finish(stopReason: "end_turn", model: "grok-4-fast")
         return conversation
+    }
+
+    /// A window and a file attached, and a skill being picked from the slash-command list.
+    private static func researchWithContext(_ model: AppModel) {
+        model.attachments = [
+            Attachment(url: URL(filePath: "/tmp/Safari window.png"), kind: .window("Safari")),
+            .file(URL(filePath: "/tmp/competitor-pricing.pdf")),
+        ]
+        model.commands = [
+            SlashCommand(name: "deep-research", description: "Research with parallel agents and write a cited report"),
+            SlashCommand(name: "design", description: "Write a design doc and review it until it holds up"),
+            SlashCommand(name: "code-review", description: "Review your branch or uncommitted changes"),
+            SlashCommand(name: "compact", description: "Compress conversation history to save context"),
+        ]
+        model.input = "/de"
     }
 
     /// The panel on a dark backdrop with the glow from the app icon, at the content's 2x scale.

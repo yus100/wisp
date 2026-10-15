@@ -1,5 +1,7 @@
 APP_NAME := Wisp
 BUNDLE_ID := com.yus100.wisp
+# A real identity (security find-identity -p codesigning) lets macOS show Wisp's notifications.
+SIGN_IDENTITY ?= -
 APP := build/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications
 SOURCES := Sources Tests Package.swift scripts/make-icon.swift
@@ -19,9 +21,9 @@ app: build ## Assemble and sign build/Wisp.app
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	cp Resources/ghostty-grok Resources/AppIcon.icns "$(APP)/Contents/Resources/"
 	chmod +x "$(APP)/Contents/Resources/ghostty-grok"
-	# Ad-hoc signature whose designated requirement is the bundle ID, so macOS privacy grants
+	# Signed (ad-hoc by default) with the bundle ID as designated requirement, so macOS privacy grants
 	# (microphone, files, Automation) survive rebuilds instead of being tied to one binary hash.
-	codesign --force --sign - --identifier $(BUNDLE_ID) \
+	codesign --force --sign "$(SIGN_IDENTITY)" --identifier $(BUNDLE_ID) \
 		-r='designated => identifier "$(BUNDLE_ID)"' "$(APP)"
 	@echo "Built $(APP)"
 

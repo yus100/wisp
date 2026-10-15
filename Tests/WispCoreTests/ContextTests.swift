@@ -110,3 +110,22 @@ import Testing
         #expect(TextPreview.line("short", limit: 10) == "short")
     }
 }
+
+@Suite struct SilentCommandTests {
+    @Test func silentSlashCommandExplainsItself() {
+        var conversation = Conversation(paths: WispPaths(home: URL(filePath: "/Users/me", directoryHint: .isDirectory)))
+        conversation.begin("/context")
+        conversation.finish(stopReason: "end_turn", model: nil)
+        #expect(conversation.turns[0].notice?.hasPrefix("/context showed nothing here.") == true)
+    }
+
+    @Test func answeredOrOrdinaryTurnsGetNoNotice() {
+        var conversation = Conversation(paths: WispPaths(home: URL(filePath: "/Users/me", directoryHint: .isDirectory)))
+        conversation.begin("plain question")
+        conversation.finish(stopReason: "end_turn", model: nil)
+        #expect(conversation.turns[0].notice == nil)
+        conversation.begin("/context")
+        conversation.finish(stopReason: "cancelled", model: nil)
+        #expect(conversation.turns[1].notice == nil)
+    }
+}

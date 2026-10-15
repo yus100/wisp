@@ -35,6 +35,8 @@ final class AppModel: ObservableObject {
     var contextApp: NSRunningApplication?
     /// An answer finished; the delegate notifies if the panel is hidden.
     var onAnswerFinished: ((Turn) -> Void)?
+    /// An answer finished while the panel was closed; cleared when it opens. Shown in the menu bar.
+    @Published var answerWaiting = false
 
     let voice = VoiceController()
     private(set) var history: SessionHistory
@@ -99,6 +101,7 @@ final class AppModel: ObservableObject {
     }
 
     func panelWillShow() {
+        answerWaiting = false
         if config.idleResetMinutes > 0, !conversation.isEmpty, !isWorking, !voice.isActive, !isHandingOff,
             Date().timeIntervalSince(lastActivity) > config.idleResetMinutes * 60
         {

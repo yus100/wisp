@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The panel's content: input bar, slash-command suggestions and attachments, the conversation (once
+/// The panel's content: input bar, attachments and slash-command suggestions, the conversation (once
 /// there is one), and a footer. Reports its height so the window can grow and shrink around it.
 struct PanelView: View {
     @ObservedObject var model: AppModel
@@ -15,11 +15,11 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             InputBar(model: model, voice: voice, onModelMenu: onModelMenu, onAttachMenu: onAttachMenu)
-            if !model.suggestions.isEmpty {
-                SuggestionList(model: model)
-            }
             if !model.attachments.isEmpty {
                 AttachmentStrip(model: model)
+            }
+            if !model.suggestions.isEmpty {
+                SuggestionList(model: model)
             }
             if !model.conversation.isEmpty {
                 Divider().opacity(0.5)

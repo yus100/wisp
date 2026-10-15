@@ -104,6 +104,13 @@ public struct Conversation: Equatable, Sendable {
         turns[index].model = model
         guard turns[index].isRunning else { return }
         turns[index].state = stopReason == "cancelled" ? .cancelled : .finished
+        let turn = turns[index]
+        // Commands that open a view in grok's terminal UI (/context, /memory) end silently over ACP.
+        if turn.state == .finished, turn.answer.isEmpty, turn.steps.isEmpty, turn.query.hasPrefix("/") {
+            let command = turn.query.split(separator: " ").first.map(String.init) ?? turn.query
+            turns[index].notice =
+                "\(command) showed nothing here. Some commands only work in grok's terminal view; ⌘↩ opens this conversation there."
+        }
     }
 
     public mutating func fail(_ message: String) {

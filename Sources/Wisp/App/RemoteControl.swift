@@ -199,6 +199,7 @@ final class ControlServer {
             "return": (36, "\r"), "enter": (76, "\u{3}"), "escape": (53, "\u{1b}"), "esc": (53, "\u{1b}"),
             "tab": (48, "\t"), "delete": (51, "\u{7f}"), "n": (45, "n"), "m": (46, "m"), ".": (47, "."),
             "w": (13, "w"), "c": (8, "c"), "v": (9, "v"), "a": (0, "a"),
+            "down": (125, "\u{F701}"), "up": (126, "\u{F700}"),
         ]
         var modifiers: NSEvent.ModifierFlags = []
         var name = ""
@@ -230,6 +231,7 @@ final class ControlServer {
             return [
                 "query": turn.query, "answer": turn.answer, "state": state, "error": error,
                 "model": turn.model ?? NSNull(), "steps": turn.steps.map(\.title), "attachments": turn.attachments,
+                "notice": turn.notice ?? NSNull(),
             ]
         }
         let state: [String: Any] = [
@@ -238,6 +240,7 @@ final class ControlServer {
             "input": model.input,
             "isWorking": model.isWorking,
             "isHandingOff": model.isHandingOff,
+            "answerWaiting": model.answerWaiting,
             "sessionId": model.sessionID ?? NSNull(),
             "notice": model.notice?.text ?? NSNull(),
             "model": model.modelLabel,

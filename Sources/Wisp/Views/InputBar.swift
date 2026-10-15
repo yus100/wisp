@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Status icon, the question field, the model chip, and the mic button.
+/// Status icon, the question field, the attach button, the model chip, and the mic button.
 struct InputBar: View {
     @ObservedObject var model: AppModel
     @ObservedObject var voice: VoiceController
     var onModelMenu: () -> Void
+    var onAttachMenu: () -> Void
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -17,6 +18,7 @@ struct InputBar: View {
                 .focused($focused)
                 .disabled(model.isHandingOff)
                 .accessibilityLabel("Question")
+            attachButton
             modelChip
             micButton
         }
@@ -30,6 +32,7 @@ struct InputBar: View {
         switch voice.state {
         case .starting, .listening: "Listening…"
         case .finishing: "Finishing…"
+        case .idle where !model.attachments.isEmpty: "Ask about this"
         case .idle: model.conversation.isEmpty ? "Ask anything" : "Ask a follow-up"
         }
     }
@@ -45,6 +48,19 @@ struct InputBar: View {
                 .font(.system(size: 19))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var attachButton: some View {
+        Button(action: onAttachMenu) {
+            Image(systemName: "paperclip")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Attach a window or files (⌘⇧A attaches the window you came from; ⌘V pastes files and images)")
+        .accessibilityLabel("Attach")
     }
 
     private var modelChip: some View {

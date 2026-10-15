@@ -28,6 +28,7 @@ enum ControlClient {
 
         These need "remoteControl": true in ~/.config/wisp/config.json:
           ask <text>                show the panel and send a question
+          attach <file>             attach a file to the next question
           voice                     start hands-free voice, or stop and send
           voice-file <file.wav>     dictate a 16 kHz mono 16-bit WAV instead of the microphone
           new                       start a new conversation
@@ -51,6 +52,9 @@ enum ControlClient {
             guard !argument.isEmpty else { return fail("\(command) needs an output path") }
             output = URL(filePath: argument)
             argument = "\(UUID().uuidString).\(command == "state" ? "json" : "png")"
+        case "attach":
+            guard !argument.isEmpty else { return fail("attach needs a file path") }
+            argument = URL(filePath: argument).standardizedFileURL.path
         case "voice-file":
             let staged = "\(UUID().uuidString).wav"
             do {
@@ -140,6 +144,9 @@ final class ControlServer {
             guard let recording else { return }
             panel.show()
             model.startVoice(.handsFree, recording: recording)
+        case "attach":
+            panel.show()
+            model.attach(files: [URL(filePath: argument)])
         case "new": model.newConversation()
         case "ghostty": model.continueInGhostty()
         case "model": model.selectModel(argument)
@@ -222,7 +229,7 @@ final class ControlServer {
             }
             return [
                 "query": turn.query, "answer": turn.answer, "state": state, "error": error,
-                "model": turn.model ?? NSNull(), "steps": turn.steps.map(\.title),
+                "model": turn.model ?? NSNull(), "steps": turn.steps.map(\.title), "attachments": turn.attachments,
             ]
         }
         let state: [String: Any] = [
@@ -239,6 +246,9 @@ final class ControlServer {
                 item.isSeparatorItem ? "---" : (item.state == .on ? "✓ " : "") + item.title
             },
             "voice": ["state": "\(model.voice.state)", "level": model.voice.level],
+            "attachments": model.attachments.map(\.url.path),
+            "commands": model.commands.count,
+            "suggestions": model.suggestions.map(\.name),
             "turns": turns,
         ]
         return try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])

@@ -1,0 +1,120 @@
+import AppKit
+import WispCore
+
+/// What goes with a question besides its text: attachments (files, images, window screenshots) and
+/// slash commands (grok's built-ins, skills, and workflows).
+extension AppModel {
+    // MARK: Slash commands
+
+    /// Commands matching what is typed, shown under the input.
+    var suggestions: [SlashCommand] {
+        SlashCommand.suggestions(for: input, in: commands)
+    }
+
+    func moveSuggestionSelection(by offset: Int) {
+        let count = suggestions.count
+        guard count > 0 else { return }
+        selectedSuggestion = (selectedSuggestion + offset + count) % count
+    }
+
+    /// Fills in the highlighted command, ready for arguments.
+    func acceptSuggestion(_ command: SlashCommand? = nil) {
+        let options = suggestions
+        guard let chosen = command ?? options[safe: selectedSuggestion] else { return }
+        input = "/\(chosen.name) "
+        selectedSuggestion = 0
+    }
+
+    func updateCommands(_ list: [SlashCommand]) {
+        guard !list.isEmpty, list != commands else { return }
+        commands = list
+        selectedSuggestion = 0
+        if let data = try? JSONEncoder().encode(list) {
+            try? data.write(to: paths.commandsFile, options: .atomic)
+        }
+    }
+
+    static func loadCommands(from file: URL) -> [SlashCommand] {
+        guard let data = try? Data(contentsOf: file) else { return [] }
+        return (try? JSONDecoder().decode([SlashCommand].self, from: data)) ?? []
+    }
+
+    // MARK: Attachments
+
+    func attach(files: [URL]) {
+        let new = files.filter { url in !attachments.contains { $0.url == url } }.map(Attachment.file)
+        attachments.append(contentsOf: new)
+        notice = nil
+    }
+
+    /// Saves pasted or dropped image data as a PNG and attaches it.
+    func attach(image: NSImage) {
+        guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        else { return }
+        let file = paths.attachments.appending(path: "Pasted image \(Self.stamp()).png")
+        do {
+            try png.write(to: file)
+            attachments.append(Attachment(url: file, kind: .image))
+            notice = nil
+        } catch {
+            notice = Notice("Could not save the image: \(error.localizedDescription)")
+        }
+    }
+
+    func removeAttachment(_ id: UUID) {
+        attachments.removeAll { $0.id == id }
+    }
+
+    /// Name of the app whose window "Attach Window" would capture.
+    var contextAppName: String? {
+        contextApp?.localizedName
+    }
+
+    /// Captures the window of the app that was in front when the panel opened.
+    func attachContextWindow() {
+        guard let app = contextApp, !app.isTerminated else {
+            notice = Notice("There's no window to attach. Open Wisp from the app you want to show it.")
+            return
+        }
+        let directory = paths.attachments
+        Task {
+            do {
+                let file = try await WindowCapture.capture(app, into: directory)
+                attachments.append(Attachment(url: file, kind: .window(app.localizedName ?? "App")))
+                notice = nil
+            } catch let failure as WindowCapture.Failure {
+                notice = Notice(
+                    failure.localizedDescription, actionTitle: failure.settingsURL == nil ? nil : "Open Settings",
+                    actionURL: failure.settingsURL)
+            } catch {
+                notice = Notice("Could not capture the window: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Removes pasted images and screenshots older than a week.
+    func pruneOldAttachments() {
+        let fileManager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+        let files =
+            (try? fileManager.contentsOfDirectory(
+                at: paths.attachments, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff { try? fileManager.removeItem(at: file) }
+        }
+    }
+
+    /// A filename-safe timestamp for saved images.
+    nonisolated static func stamp() -> String {
+        Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+            .replacingOccurrences(of: ":", with: ".")
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}

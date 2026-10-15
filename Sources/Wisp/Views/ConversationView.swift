@@ -47,6 +47,13 @@ struct TurnView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(4)
                 .textSelection(.enabled)
+            if !turn.attachments.isEmpty {
+                Label(turn.attachments.joined(separator: ", "), systemImage: "paperclip")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             steps
             if let notice = turn.notice {
                 Text(notice).font(.system(size: 12.5)).foregroundStyle(.orange)

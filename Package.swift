@@ -15,7 +15,9 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("ServiceManagement"),
+                .linkedFramework("UserNotifications"),
             ]
         ),
         .testTarget(

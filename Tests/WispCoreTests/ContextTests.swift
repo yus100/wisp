@@ -85,3 +85,28 @@ import Testing
         #expect(conversation.turns[0].attachments == ["Safari window"])
     }
 }
+
+@Suite struct TextPreviewTests {
+    @Test func stripsMarkdownToOneLine() {
+        let answer = """
+            ## Result
+
+            The **answer** is `42`, see [the docs](https://example.com).
+
+            - first_item
+            - second
+
+            | a | b |
+            |---|---|
+            | 1 | 2 |
+            """
+        #expect(
+            TextPreview.line(answer, limit: 200)
+                == "Result The answer is 42, see the docs. first_item second a b 1 2")
+    }
+
+    @Test func cutsAtAWord() {
+        #expect(TextPreview.line("one two three four", limit: 10) == "one two…")
+        #expect(TextPreview.line("short", limit: 10) == "short")
+    }
+}

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: PanelController!
     private var statusMenu: StatusMenuController?
     private var control: ControlServer?
+    private var notifier: AnswerNotifier?
     private var terminationSignal: DispatchSourceSignal?
     private var panelWasOpenOnPress = false
 
@@ -31,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.onVoiceKey = { [weak self] in self?.toggleVoice() }
         if let problem = registerHotkeys() ?? configStore.problem { model.notice = Notice(problem) }
 
+        notifyWhenAnswersFinishInBackground()
+        model.pruneOldAttachments()
         model.warmUp()
         quitCleanlyOnSIGTERM()
         Log.info("launched")
@@ -77,6 +80,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             panel.show()
             model.startVoice(.handsFree)
+        }
+    }
+
+    /// Ask, close the panel, and get a notification when the answer is ready; clicking it reopens the panel.
+    private func notifyWhenAnswersFinishInBackground() {
+        // Notifications need an app bundle; a bare `swift run` binary has none.
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let notifier = AnswerNotifier { [weak self] in self?.panel.show() }
+        self.notifier = notifier
+        model.onAnswerFinished = { [weak self] turn in
+            guard let self, !panel.isVisible, configStore.config.notifyWhenDone else { return }
+            notifier.notify(turn)
         }
     }
 

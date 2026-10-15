@@ -20,6 +20,10 @@ public struct WispPaths: Equatable, Sendable {
     public var logs: URL { created(home.appending(path: "Library/Logs/Wisp", directoryHint: .isDirectory)) }
     /// `~/Library/Application Support/Wisp/history.json`
     public var historyFile: URL { support.appending(path: "history.json") }
+    /// `~/Library/Application Support/Wisp/commands.json`: the last slash-command list grok sent.
+    public var commandsFile: URL { support.appending(path: "commands.json") }
+    /// `~/Library/Caches/Wisp/attachments`: pasted images and window screenshots.
+    public var attachments: URL { created(home.appending(path: "Library/Caches/Wisp/attachments", directoryHint: .isDirectory)) }
 
     /// Grok Build's home: `$GROK_HOME` when the login shell sets it, else `~/.grok`.
     public func grokHome(environment: [String: String]) -> URL {

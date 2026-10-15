@@ -20,6 +20,8 @@ public struct Turn: Identifiable, Equatable, Sendable {
 
     public let id = UUID()
     public let query: String
+    /// Labels of what was attached to the question, shown under it.
+    public let attachments: [String]
     public internal(set) var answer = ""
     public internal(set) var steps: [Step] = []
     public internal(set) var state = State.running
@@ -30,8 +32,9 @@ public struct Turn: Identifiable, Equatable, Sendable {
     /// Text after a tool call starts a new paragraph rather than running into the earlier text.
     var startsNewParagraph = false
 
-    public init(query: String) {
+    public init(query: String, attachments: [String] = []) {
         self.query = query
+        self.attachments = attachments
     }
 
     public var isRunning: Bool { state == .running }
@@ -49,8 +52,8 @@ public struct Conversation: Equatable, Sendable {
     public var isEmpty: Bool { turns.isEmpty }
     public var isWorking: Bool { turns.last?.isRunning ?? false }
 
-    public mutating func begin(_ query: String) {
-        turns.append(Turn(query: query))
+    public mutating func begin(_ query: String, attachments: [String] = []) {
+        turns.append(Turn(query: query, attachments: attachments))
     }
 
     public mutating func apply(_ update: SessionUpdate) {
@@ -87,7 +90,7 @@ public struct Conversation: Equatable, Sendable {
             case .retry(.failed(let message, let isAuthError)):
                 turn.notice = nil
                 turn.state = .failed(isAuthError ? "\(message) Run `grok login` in a terminal, then try again." : message)
-            case .retry(.other), .thoughtChunk, .other:
+            case .retry(.other), .thoughtChunk, .availableCommands, .other:
                 break
             }
         }

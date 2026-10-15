@@ -246,12 +246,16 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     /// ↑ and ↓ move through the slash-command suggestions; Tab or Return fills in the highlighted one.
+    /// Return on a command that is already typed in full runs it.
     private func handleSuggestionKey(_ event: NSEvent, flags: NSEvent.ModifierFlags) -> Bool {
-        guard flags.intersection([.command, .option, .control]).isEmpty else { return false }
+        guard flags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
         switch event.keyCode {
         case 125: model.moveSuggestionSelection(by: 1)  // Down
         case 126: model.moveSuggestionSelection(by: -1)  // Up
-        case 48, 36, 76: model.acceptSuggestion()  // Tab, Return, keypad Enter
+        case 48: model.acceptSuggestion()  // Tab
+        case 36, 76:  // Return, keypad Enter
+            guard !model.highlightedCommandIsTyped else { return false }
+            model.acceptSuggestion()
         default: return false
         }
         return true

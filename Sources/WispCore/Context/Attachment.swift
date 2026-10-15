@@ -1,11 +1,12 @@
 import Foundation
 
-/// Something the user handed Wisp along with a question: a file, an image, or a screenshot of the
-/// window they were looking at. The agent gets the path and opens it with its own file tools (it can
+/// Something the user handed Wisp along with a question: a file or folder, an image, or a screenshot
+/// of the window they were looking at. The agent gets the path and opens it with its own file tools (it can
 /// view images that way), so nothing needs to be uploaded separately.
 public struct Attachment: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case file
+        case folder
         case image
         /// A screenshot of an app's window; the associated value names the app.
         case window(String)
@@ -25,15 +26,17 @@ public struct Attachment: Identifiable, Equatable, Sendable {
     public var label: String {
         switch kind {
         case .window(let app): "\(app) window"
-        case .file, .image: url.lastPathComponent
+        case .file, .folder, .image: url.lastPathComponent
         }
     }
 
     static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "webp", "bmp"]
 
-    /// A file attachment, recognized as an image by its extension.
+    /// An attachment for a path on disk: a folder, an image (by its extension), or any other file.
     public static func file(_ url: URL) -> Attachment {
-        Attachment(url: url, kind: imageExtensions.contains(url.pathExtension.lowercased()) ? .image : .file)
+        let isFolder = url.hasDirectoryPath || (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        if isFolder { return Attachment(url: url, kind: .folder) }
+        return Attachment(url: url, kind: imageExtensions.contains(url.pathExtension.lowercased()) ? .image : .file)
     }
 }
 
@@ -50,6 +53,8 @@ public enum PromptComposer {
                 "- Image: \(attachment.url.path) (view it)"
             case .file:
                 "- File: \(attachment.url.path)"
+            case .folder:
+                "- Folder: \(attachment.url.path)"
             }
         }
         let request = question.isEmpty ? "Take a look at what I attached." : question

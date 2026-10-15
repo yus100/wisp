@@ -18,7 +18,10 @@ struct Notice: Equatable {
 /// session, voice input, model choice, and hand-off to Ghostty.
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var input = ""
+    @Published var input = "" {
+        // Typing changes the suggestion list, so the highlight starts over at the best match.
+        didSet { if input != oldValue { selectedSuggestion = 0 } }
+    }
     @Published private(set) var conversation: Conversation
     @Published var notice: Notice?
     @Published private(set) var catalog = ModelCatalog()

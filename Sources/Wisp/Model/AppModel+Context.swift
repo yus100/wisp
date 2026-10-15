@@ -19,10 +19,14 @@ extension AppModel {
 
     /// Fills in the highlighted command, ready for arguments.
     func acceptSuggestion(_ command: SlashCommand? = nil) {
-        let options = suggestions
-        guard let chosen = command ?? options[safe: selectedSuggestion] else { return }
+        guard let chosen = command ?? suggestions[safe: selectedSuggestion] else { return }
         input = "/\(chosen.name) "
-        selectedSuggestion = 0
+    }
+
+    /// The input already names the highlighted command in full, so Return should run it.
+    var highlightedCommandIsTyped: Bool {
+        guard let highlighted = suggestions[safe: selectedSuggestion] else { return false }
+        return input.lowercased() == "/" + highlighted.name.lowercased()
     }
 
     func updateCommands(_ list: [SlashCommand]) {

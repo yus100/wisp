@@ -72,6 +72,18 @@ import Testing
                 """)
     }
 
+    @Test func foldersAreRecognizedFromTheDiskOrTheURL() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "wisp-folder-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let bare = URL(filePath: folder.path, directoryHint: .notDirectory)
+        #expect(Attachment.file(bare).kind == .folder)
+        #expect(Attachment.file(URL(filePath: "/missing/Photos.png/", directoryHint: .isDirectory)).kind == .folder)
+        let attachment = Attachment.file(URL(filePath: "/Users/me/site/", directoryHint: .isDirectory))
+        #expect(attachment.label == "site")
+        #expect(PromptComposer.compose("tidy this", attachments: [attachment]).hasSuffix("- Folder: /Users/me/site"))
+    }
+
     @Test func plainQuestionsAndAttachmentOnlyQuestions() {
         #expect(PromptComposer.compose("hi", attachments: []) == "hi")
         #expect(

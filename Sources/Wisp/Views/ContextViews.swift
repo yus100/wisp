@@ -90,6 +90,7 @@ struct AttachmentChip: View {
         case .window: "macwindow"
         case .image: "photo"
         case .file: "doc"
+        case .folder: "folder"
         }
     }
 }

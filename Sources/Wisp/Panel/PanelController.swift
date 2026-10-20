@@ -128,8 +128,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// click), hand focus back to the previous app. Not wanted when another app is already taking over.
     func hide(returnFocus: Bool = true) {
         if model.voice.isActive, model.voice.mode == .pushToTalk { model.voice.cancel() }
-        // A notice belongs to the moment it was seen in; closing the panel dismisses it.
-        if panel.isVisible { model.notice = nil }
+        // A notice belongs to the moment it was seen in, and the history list to a search; closing the
+        // panel dismisses both.
+        if panel.isVisible {
+            model.notice = nil
+            model.closeHistory()
+        }
         panel.orderOut(nil)
         removeKeyMonitor()
         stopWaitingForMouseUp()
@@ -191,7 +195,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard let height = pendingHeight else { return }
         pendingHeight = nil
         measuredHeight = height
-        if model.conversation.isEmpty && model.notice == nil { emptyHeight = height }
+        if model.conversation.isEmpty && model.notice == nil && !model.isShowingHistory { emptyHeight = height }
         guard abs(panel.frame.height - height) > 0.5 else { return }
         if topEdge == 0 { topEdge = panel.frame.maxY }
         panel.setFrame(NSRect(x: panel.frame.minX, y: topEdge - height, width: Self.width, height: height), display: true)
@@ -234,7 +238,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         // Return confirms IME composition (for example Chinese or Japanese input); leave it alone.
         let composing = editor?.hasMarkedText() ?? false
 
-        if !composing, !model.suggestions.isEmpty, handleSuggestionKey(event, flags: flags) { return true }
+        if !composing, model.isShowingHistory, let handled = handleHistoryKey(event, flags: flags) { return handled }
+        if !composing, !model.isShowingHistory, !model.suggestions.isEmpty, handleSuggestionKey(event, flags: flags) {
+            return true
+        }
 
         switch event.keyCode {
         case 53:  // Escape
@@ -261,6 +268,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard flags.contains(.command) else { return false }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "n": model.newConversation()
+        case "y": model.toggleHistory()
         case ".": model.cancel()
         case "w": hide()
         case "m": DispatchQueue.main.async { self.showModelMenu() }  // the menu runs its own event loop
@@ -272,6 +280,22 @@ final class PanelController: NSObject, NSWindowDelegate {
         case "o": chooseFiles()
         case "v" where !flags.contains(.shift): return pasteAttachments()
         default: return false
+        }
+        return true
+    }
+
+    /// The history list: ↑ and ↓ move, Return reopens the highlighted conversation in the panel, ⌘Return
+    /// in Ghostty, and Escape goes back. Returns nil for keys the panel handles as usual (⌘N, ⌘Y, …);
+    /// false sends the key to the search field, so ⌘V pastes text there.
+    private func handleHistoryKey(_ event: NSEvent, flags: NSEvent.ModifierFlags) -> Bool? {
+        switch event.keyCode {
+        case 53: model.closeHistory()  // Escape
+        case 36, 76: model.openHighlightedHistory(inGhostty: flags.contains(.command))  // Return, keypad Enter
+        case 125: model.moveHistorySelection(by: 1)  // Down
+        case 126: model.moveHistorySelection(by: -1)  // Up
+        default:
+            let paste = flags.contains(.command) && event.charactersIgnoringModifiers?.lowercased() == "v"
+            return paste ? false : nil
         }
         return true
     }

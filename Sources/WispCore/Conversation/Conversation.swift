@@ -19,9 +19,12 @@ public struct Turn: Identifiable, Equatable, Sendable {
     }
 
     public let id = UUID()
-    public let query: String
+    public internal(set) var query: String
     /// Labels of what was attached to the question, shown under it.
-    public let attachments: [String]
+    public internal(set) var attachments: [String]
+    /// The prompt as the agent got it and grok's index for it, when replayed from history.
+    var replayedPrompt = ""
+    var replayedPromptIndex: Int?
     public internal(set) var answer = ""
     public internal(set) var steps: [Step] = []
     public internal(set) var state = State.running
@@ -90,10 +93,57 @@ public struct Conversation: Equatable, Sendable {
             case .retry(.failed(let message, let isAuthError)):
                 turn.notice = nil
                 turn.state = .failed(isAuthError ? "\(message) Run `grok login` in a terminal, then try again." : message)
-            case .retry(.other), .thoughtChunk, .availableCommands, .other:
+            case .retry(.other), .thoughtChunk, .availableCommands, .userMessageChunk, .turnCompleted, .other:
                 break
             }
         }
+    }
+
+    /// Rebuilds the turns `session/load` replays: each question, what streamed for it, and how it ended.
+    public mutating func replay(_ update: SessionUpdate) {
+        switch update {
+        case .userMessageChunk(let text, let promptIndex):
+            // A question can arrive in several chunks (text and images). Without grok's index, a new
+            // question starts once the last one has output.
+            let sameQuestion = turns.last.map { last in
+                last.isRunning
+                    && (promptIndex.map { $0 == last.replayedPromptIndex } ?? (last.answer.isEmpty && last.steps.isEmpty))
+            }
+            if sameQuestion != true {
+                endReplay()
+                turns.append(Turn(query: "", attachments: []))
+                turns[turns.count - 1].replayedPromptIndex = promptIndex
+            }
+            let index = turns.count - 1
+            turns[index].replayedPrompt += text
+            (turns[index].query, turns[index].attachments) = Self.question(replayed: turns[index].replayedPrompt)
+        case .turnCompleted(let stopReason):
+            guard turns.last?.isRunning == true else { return }
+            finish(stopReason: stopReason, model: nil)
+        default:
+            apply(update)
+        }
+    }
+
+    /// What to show for a replayed prompt. Besides the user's questions, grok's terminal sessions hold
+    /// messages it sent in the user's place: background task events and reminders, and messages typed
+    /// while the agent was working.
+    static func question(replayed prompt: String) -> (question: String, attachments: [String]) {
+        if prompt.isEmpty { return ("Image", []) }
+        if prompt.hasPrefix("<system-reminder>") || prompt.hasPrefix("<monitor-event") { return ("Background update", []) }
+        if let start = prompt.range(of: "<user_query>\n"),
+            let end = prompt.range(of: "\n</user_query>", range: start.upperBound..<prompt.endIndex)
+        {
+            return (String(prompt[start.upperBound..<end.lowerBound]), [])
+        }
+        return PromptComposer.parse(prompt)
+    }
+
+    /// Ends a replayed turn that has no `turn_completed`, such as one cut off when the agent stopped.
+    public mutating func endReplay() {
+        guard let index = turns.indices.last, turns[index].isRunning else { return }
+        turns[index].notice = nil
+        turns[index].state = .finished
     }
 
     /// Ends the running turn with the agent's reply to `session/prompt`.

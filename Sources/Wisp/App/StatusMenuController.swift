@@ -62,6 +62,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
                 showPanel()
             })
         menu.addItem(
+            ActionItem(title: "History…") { [model, showPanel] in
+                showPanel()
+                model.showHistory()
+            })
+        menu.addItem(
             ActionItem(title: "Continue in Ghostty", enabled: model.sessionID != nil) { [model] in model.continueInGhostty() })
         menu.addItem(submenu("Open Recent in Ghostty", recentItems()))
         menu.addItem(submenu("Model", modelItems()))
@@ -78,13 +83,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(ActionItem(title: "Quit Wisp") { NSApp.terminate(nil) })
     }
 
+    /// The newest conversations; History… (⌘Y in the panel) searches all of them.
     private func recentItems() -> [NSMenuItem] {
-        model.refreshHistoryTitles()
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        let items = model.history.entries.map { entry in
-            let when = formatter.localizedString(for: entry.updatedAt, relativeTo: Date())
-            return ActionItem(title: "\(entry.title)  ·  \(when)") { [model] in model.openRecent(entry) } as NSMenuItem
+        model.refreshHistory()
+        let items = model.history.available.prefix(20).map { entry in
+            ActionItem(title: "\(entry.title)  ·  \(RelativeTime.describe(entry.updatedAt))") { [model] in
+                model.openRecent(entry)
+            } as NSMenuItem
         }
         return items.isEmpty ? [ActionItem(title: "No conversations yet", enabled: false) {}] : items
     }

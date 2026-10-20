@@ -62,6 +62,25 @@ import Testing
             ])
     }
 
+    @Test func liveTurnsGetRetriesAndTurnEndsFromXAIUpdates() async throws {
+        let (agent, recorder) = try await startAgent()
+        defer { agent.stop() }
+        let session = try await agent.newSession(in: "/tmp", rules: "")
+        _ = try await agent.prompt("retry", in: session.sessionId)
+        #expect(
+            recorder.updates == [
+                .retry(.retrying(attempt: 1, maxRetries: 3)), .messageChunk("ok"), .turnCompleted(stopReason: "end_turn"),
+            ])
+
+        // A live turn shows the retry, and still ends only with the prompt's reply.
+        var conversation = Conversation()
+        conversation.begin("q")
+        for update in recorder.updates { conversation.apply(update) }
+        #expect(conversation.isWorking)
+        #expect(conversation.turns[0].answer == "ok")
+        #expect(conversation.turns[0].notice == nil)
+    }
+
     @Test func approvesPermissionRequestsAndDeclinesUnsupportedOnes() async throws {
         let (agent, recorder) = try await startAgent()
         defer { agent.stop() }
@@ -87,11 +106,15 @@ import Testing
         await agent.close(session.sessionId)
     }
 
-    @Test func loadReattachesASavedSession() async throws {
+    @Test func loadReplaysTheSavedTurnsBeforeReturning() async throws {
         let (agent, recorder) = try await startAgent()
         defer { agent.stop() }
         try await agent.load("session-1", in: "/tmp")
-        try await waitFor { await MainActor.run { recorder.updates == [.messageChunk("(replayed history)")] } }
+        #expect(
+            recorder.updates == [
+                .userMessageChunk("earlier question", promptIndex: 0), .messageChunk("(replayed answer)"),
+                .turnCompleted(stopReason: "end_turn"),
+            ])
     }
 
     @Test func crashFailsTheTurnAndReportsTheExit() async throws {

@@ -137,6 +137,20 @@ private final class Outbox: @unchecked Sendable {
         #expect(failed.update == .retry(.failed(message: "bad token", isAuthError: true)))
     }
 
+    @Test func replayedQuestionsAndTurnEnds() throws {
+        let question = try decode(
+            """
+            {"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hi"},
+             "_meta":{"modelId":"m","promptIndex":3}}}
+            """)
+        #expect(question.update == .userMessageChunk("hi", promptIndex: 3))
+        let bare = try decode(#"{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"image"}}}"#)
+        #expect(bare.update == .userMessageChunk("", promptIndex: nil))
+        let ended = try decode(
+            #"{"sessionId":"s","update":{"sessionUpdate":"turn_completed","prompt_id":"p","stop_reason":"end_turn","usage":{}}}"#)
+        #expect(ended.update == .turnCompleted(stopReason: "end_turn"))
+    }
+
     @Test func unknownKindsAndNonTextContentDecode() throws {
         #expect(try decode(#"{"sessionId":"s","update":{"sessionUpdate":"plan","entries":[]}}"#).update == .other("plan"))
         let image = try decode(

@@ -140,8 +140,8 @@ public final class GrokAgent {
         await connection?.notify("session/cancel", params: SessionParams(sessionId: sessionID))
     }
 
-    /// Re-attaches a saved session, for example after the agent restarted. grok replays the history as
-    /// updates; they arrive while no turn is running, so `Conversation` ignores them.
+    /// Loads a saved session: to reopen it from history, or to re-attach it after the agent restarted.
+    /// grok replays the history as updates, all of them before this returns.
     public func load(_ sessionID: String, in directory: String) async throws {
         _ = try await requireConnection().request(
             "session/load", params: LoadSessionParams(sessionId: sessionID, cwd: directory), as: EmptyResult.self)
@@ -168,6 +168,9 @@ public final class GrokAgent {
 
     // MARK: Private
 
+    /// grok sends `turn_completed` (and, in saved sessions, `retry_state`) as `_x.ai/session/update`.
+    private static let updateMethods: Set<String> = ["session/update", "_x.ai/session/update", "_x.ai/session_notification"]
+
     private func requireConnection() throws -> ACPConnection {
         guard isRunning, let connection else { throw ACPError.disconnected }
         return connection
@@ -176,7 +179,7 @@ public final class GrokAgent {
     private func handle(_ message: ACPConnection.Incoming, on connection: ACPConnection) async {
         let decoder = JSONDecoder()
         switch message {
-        case .notification(let method, let data) where method == "session/update" || method == "_x.ai/session_notification":
+        case .notification(let method, let data) where Self.updateMethods.contains(method):
             guard let notification = try? decoder.decode(IncomingParams<SessionNotification>.self, from: data).params else {
                 return
             }

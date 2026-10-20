@@ -15,7 +15,7 @@ struct Notice: Equatable {
 }
 
 /// The panel's state and everything it can do: one quick-answer conversation backed by a Grok Build
-/// session, voice input, model choice, and hand-off to Ghostty.
+/// session, the history of earlier ones, voice input, model choice, and hand-off to Ghostty.
 @MainActor
 final class AppModel: ObservableObject {
     @Published var input = "" {
@@ -44,10 +44,23 @@ final class AppModel: ObservableObject {
     var isCapturingWindow = false
     /// An answer finished while the panel was closed; cleared when it opens. Shown in the menu bar.
     @Published var answerWaiting = false
+    /// The saved conversations are listed in place of the current one (⌘Y).
+    @Published private(set) var isShowingHistory = false
+    /// What is typed into the search field while the history list shows.
+    @Published var historyFilter = "" {
+        didSet { if historyFilter != oldValue { selectedHistoryID = nil } }
+    }
+    /// The highlighted conversation in the history list; nil highlights the first match. Kept by ID, so a
+    /// refresh or a newly recorded conversation shifting the rows does not move it.
+    @Published private(set) var selectedHistoryID: String?
+    /// A saved conversation being loaded back into the panel.
+    @Published private(set) var reopening: SessionHistory.Entry?
 
     let voice = VoiceController()
-    private(set) var history: SessionHistory
+    @Published private(set) var history: SessionHistory
     private(set) var sessionID: String?
+    /// The folder the session runs in; a reopened one keeps the folder it was started in.
+    private var sessionDirectory: String?
 
     /// Hide the panel (after a hand-off opens Ghostty).
     var onRequestHide: (() -> Void)?
@@ -65,12 +78,21 @@ final class AppModel: ObservableObject {
     /// A `session/load` in flight. Follow-ups wait for it, and the history it replays is ignored.
     private var reattaching: Task<Void, Never>?
     private var ignoringUpdates = false
+    /// Identifies the latest reopen from history; clearing it abandons that reopen.
+    private var reopenAttempt: UUID?
+    /// The latest `session/load` of each session reopened from history, until it finishes.
+    private var loads: [String: (attempt: UUID, task: Task<Void, Never>)] = [:]
+    /// Sessions being opened in Ghostty, until the terminal is up.
+    private var launchingInGhostty: Set<String> = []
+    /// The turns `session/load` replays for the conversation being reopened.
+    private var replayed: Conversation
 
     init(configStore: ConfigStore, paths: WispPaths = .standard) {
         self.configStore = configStore
         self.paths = paths
         host = AgentHost(config: configStore.config, paths: paths)
         conversation = Conversation(paths: paths)
+        replayed = Conversation(paths: paths)
         history = SessionHistory(file: paths.historyFile)
         commands = Self.loadCommands(from: paths.commandsFile)
         host.onSessionUpdate = { [weak self] in self?.apply($0) }
@@ -97,7 +119,7 @@ final class AppModel: ObservableObject {
 
     func configDidChange(from old: WispConfig, to new: WispConfig) {
         if host.apply(new), sessionID != nil {
-            // The restarted agent has none of the old sessions loaded; the old one stays in Open Recent.
+            // The restarted agent has none of the old sessions loaded; the old one stays in the history.
             newConversation()
         }
         voice.language = new.voiceLanguage
@@ -157,6 +179,7 @@ final class AppModel: ObservableObject {
             notice = Notice("Still answering. Press ⌘. to stop it first.")
             return
         }
+        closeHistory()
         let query = typed.isEmpty ? "Take a look at what I attached." : typed
         let prompt = PromptComposer.compose(typed, attachments: attachments)
         input = ""
@@ -172,7 +195,9 @@ final class AppModel: ObservableObject {
             defer { lastActivity = Date() }
             do {
                 let (agent, session) = try await activeSession(for: conversationID)
-                history.record(session, title: conversation.turns.first?.query ?? query, directory: host.workingDirectory)
+                history.record(
+                    session, title: conversation.turns.first?.query ?? query,
+                    directory: sessionDirectory ?? host.workingDirectory)
                 if stopRequested {
                     stopRequested = false
                     conversation.finish(stopReason: "cancelled", model: nil)
@@ -209,11 +234,15 @@ final class AppModel: ObservableObject {
         conversationID = UUID()
         stopRequested = false
         sessionID = nil
+        sessionDirectory = nil
         conversation = Conversation(paths: paths)
         attachments = []
         attachmentGeneration += 1
         input = ""
         notice = nil
+        isShowingHistory = false
+        historyFilter = ""
+        abandonReopen()
         lastActivity = Date()
         focusRequest += 1
     }
@@ -231,6 +260,10 @@ final class AppModel: ObservableObject {
             updateCommands(list)
             return
         }
+        if let reopening, notification.sessionId == reopening.id {
+            replayed.replay(notification.update)
+            return
+        }
         guard !ignoringUpdates, notification.sessionId == sessionID else { return }
         conversation.apply(notification.update)
     }
@@ -242,24 +275,26 @@ final class AppModel: ObservableObject {
         let agent = try await host.running()
         guard conversationID == conversation else { throw CancellationError() }
         if let sessionID { return (agent, sessionID) }
+        let directory = host.workingDirectory
         let rules = QuickAnswerRules.text(
-            workingDirectory: host.workingDirectory, ghosttyScript: Self.ghosttyScript.path, extra: config.extraRules)
-        let session = try await agent.newSession(in: host.workingDirectory, rules: rules).sessionId
+            workingDirectory: directory, ghosttyScript: Self.ghosttyScript.path, extra: config.extraRules)
+        let session = try await agent.newSession(in: directory, rules: rules).sessionId
         guard conversationID == conversation else {
             await agent.close(session)
             throw CancellationError()
         }
         sessionID = session
+        sessionDirectory = directory
         await applyModelSettings(to: session, on: agent)
         return (agent, session)
     }
 
     /// Loads a saved session into the agent. grok replays its history as updates, which must not
     /// land in a running turn, so updates are ignored until the load returns (they all arrive before it).
-    private func reattach(_ session: String, on agent: GrokAgent) async throws {
+    private func reattach(_ session: String, in directory: String, on agent: GrokAgent) async throws {
         ignoringUpdates = true
         defer { ignoringUpdates = false }
-        try await agent.load(session, in: host.workingDirectory)
+        try await agent.load(session, in: directory)
         await applyModelSettings(to: session, on: agent)
     }
 
@@ -268,10 +303,11 @@ final class AppModel: ObservableObject {
     private func agentDied(status: Int32) {
         if isWorking { conversation.fail("The agent stopped unexpectedly (status \(status)). Ask again to continue.") }
         guard let session = sessionID else { return }
+        let directory = sessionDirectory ?? host.workingDirectory
         reattaching = Task {
             defer { reattaching = nil }
             do {
-                try await reattach(session, on: try await host.running())
+                try await reattach(session, in: directory, on: try await host.running())
             } catch {
                 if sessionID == session { sessionID = nil }
                 notice = Notice("The agent restarted, so follow-ups start a new session.")
@@ -339,6 +375,145 @@ final class AppModel: ObservableObject {
         host.refreshCatalog()
     }
 
+    // MARK: History
+
+    var historyMatches: [SessionHistory.Entry] { history.matching(historyFilter) }
+
+    /// The highlighted row of the history list.
+    var highlightedHistoryEntry: SessionHistory.Entry? {
+        let matches = historyMatches
+        return matches.first { $0.id == selectedHistoryID } ?? matches.first
+    }
+
+    /// ⌘Y: the saved conversations, newest first, in place of the current one.
+    /// `refreshing`: first hide sessions that are gone and adopt Grok Build's titles.
+    func showHistory(refreshing: Bool = true) {
+        if voice.isActive { voice.cancel() }
+        historyFilter = ""
+        selectedHistoryID = nil
+        isShowingHistory = true
+        focusRequest += 1
+        if refreshing { refreshHistory() }
+    }
+
+    /// Back to the current conversation. A reopen still loading is abandoned.
+    func closeHistory() {
+        guard isShowingHistory else { return }
+        isShowingHistory = false
+        historyFilter = ""
+        abandonReopen()
+        focusRequest += 1
+    }
+
+    func toggleHistory() {
+        if isShowingHistory { closeHistory() } else { showHistory() }
+    }
+
+    func moveHistorySelection(by offset: Int) {
+        let matches = historyMatches
+        guard !matches.isEmpty else { return }
+        let current = matches.firstIndex { $0.id == selectedHistoryID } ?? 0
+        selectedHistoryID = matches[min(max(current + offset, 0), matches.count - 1)].id
+    }
+
+    /// ↩ reopens the highlighted conversation in the panel; ⌘↩ resumes it in Ghostty.
+    func openHighlightedHistory(inGhostty: Bool) {
+        guard let entry = highlightedHistoryEntry, !isHandingOff else { return }
+        if inGhostty {
+            closeHistory()
+            openRecent(entry)
+        } else {
+            reopen(entry)
+        }
+    }
+
+    /// Hides conversations whose Grok Build session is gone and adopts the titles Grok Build generated.
+    /// Waits for the login shell's environment, whose `GROK_HOME` can move the sessions.
+    func refreshHistory() {
+        guard let grokHome = host.resolvedGrokHome else {
+            Task {
+                _ = await host.environment()
+                refreshHistory()
+            }
+            return
+        }
+        history.refresh(grokHome: grokHome)
+    }
+
+    /// Loads a saved conversation back into the panel with `session/load`. grok replays its turns before
+    /// the load returns; they replace the current conversation only once it succeeds, so a failure, or
+    /// going back with esc meanwhile, leaves the current one as it was. What you had typed comes along.
+    func reopen(_ entry: SessionHistory.Entry) {
+        guard !isHandingOff else { return }
+        guard entry.id != sessionID else { return closeHistory() }
+        guard reopening?.id != entry.id, !isOpenInTerminal(entry) else { return }
+        guard !isWorking else {
+            notice = Notice("Still answering. Press ⌘. to stop it first.")
+            return
+        }
+        let attempt = UUID()
+        reopenAttempt = attempt
+        reopening = entry
+        notice = nil
+        // An abandoned load of the same session must finish first, or its replay would mix into this one.
+        let previous = loads[entry.id]?.task
+        let task = Task {
+            defer { if loads[entry.id]?.attempt == attempt { loads[entry.id] = nil } }
+            // The deadline only ends the attempt. The load itself runs on, so it can be unloaded when it returns.
+            let deadline = Task {
+                try await Task.sleep(for: .seconds(60))
+                guard reopenAttempt == attempt else { return }
+                abandonReopen()
+                notice = Notice("Could not open “\(entry.title)”: it took too long to load.")
+            }
+            defer { deadline.cancel() }
+            await previous?.value
+            guard reopenAttempt == attempt else { return }
+            do {
+                let agent = try await host.running()
+                guard reopenAttempt == attempt else { return }
+                replayed = Conversation(paths: paths)
+                try await agent.load(entry.id, in: entry.directory)
+                guard reopenAttempt == attempt else {
+                    // Abandoned while loading: unload it again, so a terminal can resume it alone.
+                    await agent.close(entry.id)
+                    return
+                }
+                var loaded = replayed
+                loaded.endReplay()
+                replayed = Conversation(paths: paths)
+                let draft = (input, attachments)
+                newConversation()  // stops and unloads the current session, and ends this reopen
+                (input, attachments) = draft
+                conversation = loaded
+                sessionID = entry.id
+                sessionDirectory = entry.directory
+                await applyModelSettings(to: entry.id, on: agent)
+            } catch {
+                guard reopenAttempt == attempt else { return }
+                abandonReopen()
+                if !(error is CancellationError) {
+                    notice = Notice("Could not open “\(entry.title)”: \(error.localizedDescription)")
+                }
+            }
+        }
+        loads[entry.id] = (attempt, task)
+    }
+
+    private func abandonReopen() {
+        reopenAttempt = nil
+        reopening = nil
+    }
+
+    /// A conversation open in a Grok Build terminal session must not be opened again, here or in another
+    /// window: two processes would write one session.
+    private func isOpenInTerminal(_ entry: SessionHistory.Entry) -> Bool {
+        guard launchingInGhostty.contains(entry.id) || GrokSessionStore(grokHome: host.grokHome).isOpenInTerminal(entry.id)
+        else { return false }
+        notice = Notice("That conversation is already open in Grok Build, probably in Ghostty.")
+        return true
+    }
+
     // MARK: Ghostty
 
     static var ghosttyScript: URL {
@@ -368,6 +543,7 @@ final class AppModel: ObservableObject {
         }
         isHandingOff = true
         notice = Notice("Opening in Ghostty…")
+        let directory = sessionDirectory ?? host.workingDirectory
         Task {
             defer { isHandingOff = false }
             let agent = try? await host.running()
@@ -378,14 +554,14 @@ final class AppModel: ObservableObject {
             // Unload here first so the TUI is the only process writing the session.
             await agent?.close(session)
             do {
-                try await launcher().open(.init(directory: host.workingDirectory, resume: session, target: config.ghosttyTarget))
+                try await launcher().open(.init(directory: directory, resume: session, target: config.ghosttyTarget))
                 if sessionID == session {
                     sessionID = nil
                     newConversation()
                 }
                 onRequestHide?()
             } catch {
-                if let agent { try? await reattach(session, on: agent) }
+                if let agent { try? await reattach(session, in: directory, on: agent) }
                 show(error)
                 focusRequest += 1
             }
@@ -393,26 +569,29 @@ final class AppModel: ObservableObject {
     }
 
     func openRecent(_ entry: SessionHistory.Entry) {
-        if entry.id == sessionID {
-            continueInGhostty()
-        } else {
-            open(GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget))
+        if entry.id == sessionID { return continueInGhostty() }
+        guard !isOpenInTerminal(entry) else { return }
+        if reopening?.id == entry.id { abandonReopen() }
+        // A load of it here that was abandoned unloads it when done; the terminal must be its only writer.
+        let pending = loads[entry.id]?.task
+        launchingInGhostty.insert(entry.id)
+        Task {
+            defer { launchingInGhostty.remove(entry.id) }
+            await pending?.value
+            await launch(GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget))
         }
     }
 
-    /// Recent sessions, retitled with the titles Grok Build generated for them.
-    func refreshHistoryTitles() {
-        history.adoptGrokTitles(grokHome: host.grokHome)
+    private func open(_ request: GhosttyLauncher.Request) {
+        Task { await launch(request) }
     }
 
-    private func open(_ request: GhosttyLauncher.Request) {
-        Task {
-            do {
-                try await launcher().open(request)
-                onRequestHide?()
-            } catch {
-                show(error)
-            }
+    private func launch(_ request: GhosttyLauncher.Request) async {
+        do {
+            try await launcher().open(request)
+            onRequestHide?()
+        } catch {
+            show(error)
         }
     }
 
@@ -435,6 +614,7 @@ final class AppModel: ObservableObject {
     /// Starts dictation; `recording` (16 kHz mono 16-bit WAV bytes) stands in for the microphone.
     func startVoice(_ mode: VoiceController.Mode, recording: Data? = nil) {
         guard !voice.isActive, !isHandingOff else { return }
+        closeHistory()
         notice = nil
         voiceBaseText = input.trimmingCharacters(in: .whitespacesAndNewlines)
         voice.start(mode, recording: recording)

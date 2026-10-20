@@ -75,6 +75,7 @@ Then tap **⌥ Space**. Wisp starts when you log in, so the hotkey is always the
 | **⌘ ↩** | Continue in Ghostty, or start a dev session for what you typed |
 | **⌘ M** | Pick the model and reasoning effort |
 | **⌘ N** | New conversation |
+| **⌘ Y** | History: search earlier conversations and pick one up again |
 | **esc** | Close |
 
 Everything else (hotkeys, default model, window or tab, working folder) lives in `~/.config/wisp/config.json` and applies as soon as you save. See the [guide](docs/guide.md).

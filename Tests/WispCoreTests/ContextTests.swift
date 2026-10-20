@@ -103,6 +103,25 @@ import Testing
         )
     }
 
+    @Test func composedPromptsSplitBackIntoQuestionAndLabels() {
+        let attachments = [
+            Attachment(url: URL(filePath: "/tmp/w 1.png"), kind: .window("Google Chrome")),
+            Attachment(url: URL(filePath: "/tmp/Pasted image.png"), kind: .image),
+            .file(URL(filePath: "/Users/me/notes.txt")),
+            Attachment(url: URL(filePath: "/Users/me/site"), kind: .folder),
+        ]
+        let parsed = PromptComposer.parse(PromptComposer.compose("what's wrong?\n\nsee below", attachments: attachments))
+        #expect(parsed.question == "what's wrong?\n\nsee below")
+        #expect(parsed.attachments == attachments.map(\.label))
+        #expect(parsed.attachments == ["Google Chrome window", "Pasted image.png", "notes.txt", "site"])
+    }
+
+    @Test func otherPromptsParseWhole() {
+        #expect(PromptComposer.parse("hi") == ("hi", []))
+        let lookalike = "q\n\nAttached (open these with your file tools):\n- something else"
+        #expect(PromptComposer.parse(lookalike) == (lookalike, []))
+    }
+
     @Test func turnsRememberAttachmentLabels() {
         var conversation = Conversation()
         conversation.begin("what is this?", attachments: ["Safari window"])

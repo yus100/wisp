@@ -187,13 +187,15 @@ struct PermissionResponse: Encodable, Sendable {
 
 // MARK: Session updates
 
-/// A `session/update` or `_x.ai/session_notification` for one session.
+/// A `session/update`, `_x.ai/session/update`, or `_x.ai/session_notification` for one session.
 public struct SessionNotification: Decodable, Sendable {
     public let sessionId: String
     public let update: SessionUpdate
 }
 
 public enum SessionUpdate: Decodable, Sendable, Equatable {
+    /// Part of a question, which `session/load` replays. Chunks of one question share a prompt index.
+    case userMessageChunk(String, promptIndex: Int?)
     case messageChunk(String)
     case thoughtChunk(String)
     case toolCall(ToolCall)
@@ -201,6 +203,8 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
     case retry(RetryState)
     /// The slash commands the session accepts: built-ins, skills, and saved workflows.
     case availableCommands([SlashCommand])
+    /// A turn ended; `session/load` replays one after each answer.
+    case turnCompleted(stopReason: String?)
     case other(String)
 
     public init(from decoder: Decoder) throws {
@@ -208,6 +212,10 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
         let kind = try container.decode(String.self, forKey: .sessionUpdate)
         let single = try decoder.singleValueContainer()
         switch kind {
+        case "user_message_chunk":
+            self = .userMessageChunk(
+                (try? container.decode(TextContent.self, forKey: .content).text) ?? "",
+                promptIndex: try? container.decodeIfPresent(PromptMeta.self, forKey: .meta)?.promptIndex)
         case "agent_message_chunk":
             self = .messageChunk((try? container.decode(TextContent.self, forKey: .content).text) ?? "")
         case "agent_thought_chunk":
@@ -221,6 +229,8 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
         case "available_commands_update":
             let commands = (try? container.decode([LenientCommand].self, forKey: .availableCommands)) ?? []
             self = .availableCommands(commands.compactMap(\.command))
+        case "turn_completed":
+            self = .turnCompleted(stopReason: try? container.decodeIfPresent(String.self, forKey: .stopReason))
         default:
             self = .other(kind)
         }
@@ -228,6 +238,10 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
 
     private struct TextContent: Decodable {
         let text: String?
+    }
+
+    private struct PromptMeta: Decodable {
+        let promptIndex: Int?
     }
 
     /// One malformed entry must not drop the whole list.
@@ -241,6 +255,8 @@ public enum SessionUpdate: Decodable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case sessionUpdate, content, availableCommands
+        case stopReason = "stop_reason"
+        case meta = "_meta"
     }
 }
 

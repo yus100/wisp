@@ -6,6 +6,7 @@ struct ConversationView: View {
     let conversation: Conversation
     let maxHeight: CGFloat
     @State private var contentHeight: CGFloat = 0
+    @State private var hasScrolledToEnd = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -28,6 +29,12 @@ struct ConversationView: View {
                     })
             }
             .frame(height: min(max(contentHeight, 40), maxHeight))
+            .onChange(of: contentHeight) {
+                // Coming back from the history list, or reopening a conversation, shows the latest answer.
+                guard !hasScrolledToEnd, contentHeight > 0 else { return }
+                hasScrolledToEnd = true
+                proxy.scrollTo(Self.bottom, anchor: .bottom)
+            }
             .onChange(of: conversation.turns.last?.answer) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
             .onChange(of: conversation.turns.count) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
         }

@@ -29,7 +29,7 @@ Sources/Wisp/
                   WindowCapture
   Voice/          VoiceController, MicrophoneCapture
   Panel/          PanelController (+Testing), ModelMenu
-  Views/          PanelView, InputBar, ContextViews, ConversationView, MarkdownView, FooterView
+  Views/          PanelView, InputBar, ContextViews, ConversationView, HistoryList, MarkdownView, FooterView
 Resources/        Info.plist, ghostty-grok, AppIcon.icns
 docs/assets/      README images (make icon, make screenshots)
 ```
@@ -38,7 +38,7 @@ docs/assets/      README images (make icon, make screenshots)
 
 1. **Hotkey.** `HotkeyController` gets key-down from Carbon and the delegate shows the panel immediately. Key-up within 300 ms is a tap; holding longer starts push-to-talk.
 2. **Submit.** `AppModel.submit` appends a running `Turn` and asks `AgentHost` for the warm agent. On the first question of a conversation it calls `session/new` in the working directory with always-approve and `QuickAnswerRules` as extra system-prompt rules, then applies the chosen model and effort with `session/set_config_option`.
-3. **Stream.** `session/prompt` runs the turn. grok streams `session/update` notifications (text chunks, tool calls, tool updates) and `_x.ai/session_notification` (retry state). `Conversation.apply` folds each into the turn, and SwiftUI re-renders.
+3. **Stream.** `session/prompt` runs the turn. grok streams `session/update` notifications (text chunks, tool calls, tool updates), plus `_x.ai/session_notification` and `_x.ai/session/update` (retry state, turn ends). `Conversation.apply` folds each into the turn, and SwiftUI re-renders.
 4. **Finish.** The `session/prompt` reply carries the stop reason and the model that answered. The reply is handled only after every update that preceded it (see ordering, below), so a turn never ends before its last words.
 
 ## The agent (ACP)
@@ -59,6 +59,13 @@ docs/assets/      README images (make icon, make screenshots)
 - Each conversation has an identity. Work that outlives its conversation (a session still being created when you press ⌘N, a prompt that returns late) checks it and leaves the new conversation alone; a session created for a conversation that is already gone is closed.
 - ⌘. before the turn's session exists is remembered and applied as soon as it does.
 - `session/load` replays the session's history as updates. Re-attaching ignores updates until the load returns (they all arrive before its reply), and follow-up questions wait for the re-attach to finish.
+
+## History
+
+- **Pointers only.** `SessionHistory` keeps up to 100 entries (session ID, title, folder, last question) in `history.json`, newest first; asking moves a conversation to the top. Opening the list or the menu refreshes it: entries whose session folder is gone are hidden (never deleted, so a wrong `GROK_HOME` cannot erase anything) and Grok Build's generated titles (`summary.json`) replace the first question. The refresh waits for the login shell's environment, since `GROK_HOME` can move the sessions.
+- **The list.** ⌘Y sets `isShowingHistory`; the input field's binding switches to the filter (one field, so focus stays put) and `HistoryList` replaces the conversation. The panel's key monitor handles ↑ ↓ ↩ ⌘↩ and esc first while it shows; filtering matches every typed word against titles, ignoring case and accents. The highlight is kept by session ID, so rows shifting under it (a refresh, a newly recorded conversation) do not change what ↩ opens. Hiding the panel, attaching something, asking, and voice all leave the list.
+- **Reopening.** ↩ loads the session with `session/load` in its own folder. After 60 seconds the attempt gives up with a notice; the load itself runs on, so it is unloaded when it returns. While it loads, its replayed updates (`user_message_chunk`, the answer's chunks and tool calls, and `turn_completed`) build a separate `Conversation` through `Conversation.replay`; `PromptComposer.parse` turns a replayed prompt back into the question and attachment labels, and grok's own messages in terminal sessions (reminders, background task events) get a short label. Only when the load succeeds does it replace the current conversation (whose session is stopped and unloaded, as with ⌘N; the typed draft and attachments carry over), so a failure leaves things as they were. Leaving the list abandons a load still running, which unloads its session when it returns; a later load of the same session, or opening it in Ghostty, waits for that first, so replays never mix and the terminal is the only writer.
+- **One writer.** grok's terminal UI lists the sessions it has open, with pid and start time, in `active_sessions.json` (`grok agent` does not). Wisp refuses to reopen, or open in Ghostty, a session a live terminal process holds or that it is still opening in Ghostty, and it refuses to switch away while an answer is streaming.
 
 ## Attachments and slash commands
 
@@ -107,7 +114,7 @@ MicrophoneCapture ──AsyncStream<Data>──▶ SpeechToText.transcribe ─�
 | What | Where |
 | --- | --- |
 | Settings | `~/.config/wisp/config.json`, watched with dispatch sources and applied live. Reloads are read-only (a file briefly missing mid-save changes nothing), a file with errors is never overwritten, and saves go through a symlinked config to its target |
-| Recent conversations | `~/Library/Application Support/Wisp/history.json`; titles come from grok's `summary.json` |
+| History | `~/Library/Application Support/Wisp/history.json`: up to 100 pointers to Grok Build sessions; titles come from grok's `summary.json` |
 | Slash commands | `~/Library/Application Support/Wisp/commands.json`, the last list grok sent |
 | Attachments | `~/Library/Caches/Wisp/attachments`: window screenshots and pasted images, kept a week |
 | Logs | `~/Library/Logs/Wisp/app.log` (Wisp) and `agent.log` (grok's stderr); each starts afresh past 5 MB, checked at launch and agent start |

@@ -45,7 +45,9 @@ extension AppModel {
 
     // MARK: Attachments
 
+    /// Attaching starts a question, so it leaves the history list.
     func attach(files: [URL]) {
+        closeHistory()
         let new = files.filter { url in !attachments.contains { $0.url == url } }.map(Attachment.file)
         attachments.append(contentsOf: new)
         notice = nil
@@ -56,6 +58,7 @@ extension AppModel {
         guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
             let png = bitmap.representation(using: .png, properties: [:])
         else { return }
+        closeHistory()
         let file = Self.newFile(named: "Pasted image", in: paths.attachments)
         do {
             try png.write(to: file)
@@ -78,6 +81,7 @@ extension AppModel {
     /// Captures the window of the app that was in front when the panel opened.
     func attachContextWindow() {
         guard !isCapturingWindow else { return }
+        closeHistory()
         guard let app = contextApp, !app.isTerminated else {
             notice = Notice("There's no window to attach. Open Wisp from the app you want to show it.")
             return

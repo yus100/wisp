@@ -67,6 +67,11 @@ final class AgentHost {
         paths.grokHome(environment: resolvedEnvironment ?? [:])
     }
 
+    /// Grok Build's home once the login shell's environment is known, else nil.
+    var resolvedGrokHome: URL? {
+        resolvedEnvironment.map { paths.grokHome(environment: $0) }
+    }
+
     /// What the agent (and the `ghostty-grok` runs it makes) sees: the login environment plus the grok
     /// path, when one is configured. `ghostty-grok` reads `ghosttyTarget` from the config file itself, so
     /// changing it takes effect without restarting the agent.

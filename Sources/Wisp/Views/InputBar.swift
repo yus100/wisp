@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Status icon, the question field, the attach button, the model chip, and the mic button.
+/// Status icon, the question field, the attach button, the model chip, and the mic button. While the
+/// history list shows, the field searches it instead.
 struct InputBar: View {
     @ObservedObject var model: AppModel
     @ObservedObject var voice: VoiceController
@@ -11,16 +12,19 @@ struct InputBar: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             statusIcon.frame(width: 26, height: 26)
-            TextField(placeholder, text: $model.input, axis: .vertical)
+            // One field for both, so it keeps focus when the history list opens and closes.
+            TextField(placeholder, text: model.isShowingHistory ? $model.historyFilter : $model.input, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 22, weight: .light))
                 .lineLimit(1...6)
                 .focused($focused)
                 .disabled(model.isHandingOff)
-                .accessibilityLabel("Question")
-            attachButton
-            modelChip
-            micButton
+                .accessibilityLabel(model.isShowingHistory ? "Search conversations" : "Question")
+            if !model.isShowingHistory {
+                attachButton
+                modelChip
+                micButton
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 15)
@@ -29,7 +33,8 @@ struct InputBar: View {
     }
 
     private var placeholder: String {
-        switch voice.state {
+        if model.isShowingHistory { return "Search conversations" }
+        return switch voice.state {
         case .starting, .listening: "Listening…"
         case .finishing: "Finishing…"
         case .idle where !model.attachments.isEmpty: "Ask about this"
@@ -41,10 +46,10 @@ struct InputBar: View {
     private var statusIcon: some View {
         if voice.isActive {
             MicLevelView(level: voice.level, waiting: voice.state == .starting)
-        } else if model.isWorking || model.isHandingOff {
+        } else if model.isWorking || model.isHandingOff || model.reopening != nil {
             ProgressView().controlSize(.small)
         } else {
-            Image(systemName: "sparkle")
+            Image(systemName: model.isShowingHistory ? "clock.arrow.circlepath" : "sparkle")
                 .font(.system(size: 19))
                 .foregroundStyle(.secondary)
         }

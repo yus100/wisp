@@ -15,6 +15,12 @@ enum Screenshots {
                 ("panel.png", .init(conversation: diskSpace)),
                 ("handoff.png", .init(conversation: devSession)),
                 ("context.png", .init(conversation: { Conversation(paths: $0) }, compose: researchWithContext)),
+                (
+                    "history.png",
+                    .init(
+                        conversation: { Conversation(paths: $0) }, history: pastConversations,
+                        compose: { $0.showHistory(refreshing: false) })
+                ),
             ]
             for (name, sample) in samples {
                 let file = directory.appending(path: name)
@@ -34,6 +40,8 @@ enum Screenshots {
 
     private struct Sample {
         var conversation: (WispPaths) -> Conversation
+        /// Saved conversations: title, folder under home, and how long ago, newest first.
+        var history: [(String, String, TimeInterval)] = []
         /// Fills in the input row: typed text, attachments, slash commands.
         var compose: (AppModel) -> Void = { _ in }
     }
@@ -46,6 +54,11 @@ enum Screenshots {
         config.model = "grok-4-fast"
         config.reasoningEffort = "low"
         try config.save(to: paths.configFile)
+        var history = SessionHistory(file: paths.historyFile)
+        for (index, (title, folder, age)) in sample.history.enumerated().reversed() {
+            let directory = paths.expand(folder.isEmpty ? "~" : "~/" + folder)
+            history.record("sample-\(index)", title: title, directory: directory, at: Date().addingTimeInterval(-age))
+        }
 
         let model = AppModel(configStore: ConfigStore(file: paths.configFile), paths: paths)
         model.showSample(
@@ -112,6 +125,16 @@ enum Screenshots {
         ]
         model.input = "/de"
     }
+
+    /// The history list (⌘Y) with a week of conversations.
+    private static let pastConversations: [(String, String, TimeInterval)] = [
+        ("What's eating my disk space", "", 4 * 60),
+        ("Dark mode toggle for the portfolio site", "code/portfolio", 2 * 3600),
+        ("Summarize the competitor pricing PDF", "", 26 * 3600),
+        ("Why CI fails on macOS 15 runners", "code/wisp", 2 * 86400),
+        ("Train times from SF to Tahoe this weekend", "", 4 * 86400),
+        ("Rename vacation photos by date taken", "Pictures", 8 * 86400),
+    ]
 
     /// The panel on a dark backdrop with the glow from the app icon, at the content's 2x scale.
     private static func hero(around content: NSBitmapImageRep) -> Data? {

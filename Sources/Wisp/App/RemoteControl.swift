@@ -32,10 +32,11 @@ enum ControlClient {
           voice                     start hands-free voice, or stop and send
           voice-file <file.wav>     dictate a 16 kHz mono 16-bit WAV instead of the microphone
           new                       start a new conversation
+          history                   show the panel with the conversation history (⌘Y)
           ghostty                   continue the current conversation in Ghostty
           model <id> | effort <e>   choose the model or reasoning effort
           type <text>               type text into the panel as key presses
-          key <keys>                press keys, e.g. return, escape, cmd+return, cmd+n, shift+return
+          key <keys>                press keys, e.g. return, escape, cmd+return, cmd+n, cmd+y, down
           state <out.json>          write the panel state as JSON
           snapshot <out.png>        render the panel to a PNG
         """
@@ -149,6 +150,9 @@ final class ControlServer {
             panel.show()
             model.attach(files: [URL(filePath: argument)])
         case "new": model.newConversation()
+        case "history":
+            panel.show()
+            model.showHistory()
         case "ghostty": model.continueInGhostty()
         case "model": model.selectModel(argument)
         case "effort": model.selectEffort(argument)
@@ -199,7 +203,7 @@ final class ControlServer {
         let keys: [String: (code: UInt16, characters: String)] = [
             "return": (36, "\r"), "enter": (76, "\u{3}"), "escape": (53, "\u{1b}"), "esc": (53, "\u{1b}"),
             "tab": (48, "\t"), "delete": (51, "\u{7f}"), "n": (45, "n"), "m": (46, "m"), ".": (47, "."),
-            "w": (13, "w"), "c": (8, "c"), "v": (9, "v"), "a": (0, "a"), "o": (31, "o"),
+            "w": (13, "w"), "c": (8, "c"), "v": (9, "v"), "a": (0, "a"), "o": (31, "o"), "y": (16, "y"),
             "down": (125, "\u{F701}"), "up": (126, "\u{F700}"),
         ]
         var modifiers: NSEvent.ModifierFlags = []
@@ -256,6 +260,14 @@ final class ControlServer {
             "commands": model.commands.count,
             "suggestions": model.suggestions.map(\.name),
             "turns": turns,
+            "history": [
+                "visible": model.isShowingHistory,
+                "filter": model.historyFilter,
+                "selected": model.selectedHistoryEntry,
+                "reopening": model.reopening?.id ?? NSNull(),
+                "count": model.history.entries.count,
+                "matches": model.historyMatches.map { ["id": $0.id, "title": $0.title, "directory": $0.directory] },
+            ],
         ]
         return try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])
     }

@@ -1,6 +1,7 @@
 import Foundation
 
-/// The quick-answer sessions Wisp started, newest first, so any of them can be reopened in Ghostty.
+/// The quick-answer sessions Wisp started, newest first, so any of them can be reopened in the panel or
+/// in Ghostty. Entries only point at Grok Build sessions; the conversations themselves stay in grok's files.
 public struct SessionHistory: Sendable {
     public struct Entry: Codable, Equatable, Identifiable, Sendable {
         /// The grok session ID.
@@ -10,11 +11,13 @@ public struct SessionHistory: Sendable {
         public var updatedAt: Date
     }
 
+    public static let defaultLimit = 100
+
     public private(set) var entries: [Entry] = []
     private let file: URL
     private let limit: Int
 
-    public init(file: URL, limit: Int = 20) {
+    public init(file: URL, limit: Int = defaultLimit) {
         self.file = file
         self.limit = limit
         if let data = try? Data(contentsOf: file), let saved = try? Self.decoder.decode([Entry].self, from: data) {
@@ -36,18 +39,31 @@ public struct SessionHistory: Sendable {
         save()
     }
 
-    /// Swaps in the titles Grok Build generated for each session, which read better than the first question.
-    public mutating func adoptGrokTitles(grokHome: URL) {
-        var changed = false
-        for index in entries.indices {
-            let entry = entries[index]
-            guard let title = GrokSessionStore(grokHome: grokHome).title(of: entry.id, directory: entry.directory),
-                title != entry.title
-            else { continue }
-            entries[index].title = title
-            changed = true
+    /// Entries whose title contains every word of `filter` (ignoring case and accents), newest first.
+    public func matching(_ filter: String) -> [Entry] {
+        let words = filter.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return entries }
+        return entries.filter { entry in words.allSatisfy { entry.title.localizedStandardContains($0) } }
+    }
+
+    /// Drops entries whose Grok Build session folder is gone and swaps in the titles Grok Build generated,
+    /// which read better than the first question. Without a sessions folder at all (`grokHome` is
+    /// probably wrong), nothing is dropped.
+    public mutating func refresh(grokHome: URL) {
+        let store = GrokSessionStore(grokHome: grokHome)
+        let canPrune = FileManager.default.fileExists(atPath: store.sessions.path)
+        var refreshed: [Entry] = []
+        for var entry in entries {
+            guard let folder = store.folder(of: entry.id, directory: entry.directory) else {
+                if !canPrune { refreshed.append(entry) }
+                continue
+            }
+            if let title = GrokSessionStore.title(in: folder) { entry.title = title }
+            refreshed.append(entry)
         }
-        if changed { save() }
+        guard refreshed != entries else { return }
+        entries = refreshed
+        save()
     }
 
     private func save() {
@@ -79,8 +95,8 @@ public struct GrokSessionStore: Sendable {
 
     var sessions: URL { grokHome.appending(path: "sessions", directoryHint: .isDirectory) }
 
-    /// The generated (or manually set) title from the session's `summary.json`.
-    public func title(of sessionID: String, directory: String) -> String? {
+    /// The generated (or manually set) title from a session folder's `summary.json`.
+    static func title(in folder: URL) -> String? {
         struct Summary: Decodable {
             let generatedTitle: String?
 
@@ -88,8 +104,7 @@ public struct GrokSessionStore: Sendable {
                 case generatedTitle = "generated_title"
             }
         }
-        guard let folder = folder(of: sessionID, directory: directory),
-            let data = try? Data(contentsOf: folder.appending(path: "summary.json")),
+        guard let data = try? Data(contentsOf: folder.appending(path: "summary.json")),
             let title = try? JSONDecoder().decode(Summary.self, from: data).generatedTitle,
             !title.isEmpty
         else { return nil }

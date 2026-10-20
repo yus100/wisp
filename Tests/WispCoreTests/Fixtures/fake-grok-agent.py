@@ -89,8 +89,14 @@ for line in sys.stdin:
             chunk(session_id, "world")
         send({"jsonrpc": "2.0", "id": request_id, "result": {"stopReason": "end_turn", "_meta": {"modelId": model}}})
     elif method == "session/load":
+        # Like grok: replay the saved turns, then reply.
+        session_id = params["sessionId"]
+        update(session_id, {"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "earlier question"},
+                            "_meta": {"promptIndex": 0}})
+        chunk(session_id, "(replayed answer)")
+        send({"jsonrpc": "2.0", "method": "_x.ai/session/update", "params": {"sessionId": session_id, "update": {
+            "sessionUpdate": "turn_completed", "stop_reason": "end_turn"}}})
         send({"jsonrpc": "2.0", "id": request_id, "result": {}})
-        chunk(params["sessionId"], "(replayed history)")
     elif method == "session/close":
         send({"jsonrpc": "2.0", "id": request_id, "result": None})
     elif method == "session/cancel":

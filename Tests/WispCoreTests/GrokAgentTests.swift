@@ -87,11 +87,15 @@ import Testing
         await agent.close(session.sessionId)
     }
 
-    @Test func loadReattachesASavedSession() async throws {
+    @Test func loadReplaysTheSavedTurnsBeforeReturning() async throws {
         let (agent, recorder) = try await startAgent()
         defer { agent.stop() }
         try await agent.load("session-1", in: "/tmp")
-        try await waitFor { await MainActor.run { recorder.updates == [.messageChunk("(replayed history)")] } }
+        #expect(
+            recorder.updates == [
+                .userMessageChunk("earlier question", promptIndex: 0), .messageChunk("(replayed answer)"),
+                .turnCompleted(stopReason: "end_turn"),
+            ])
     }
 
     @Test func crashFailsTheTurnAndReportsTheExit() async throws {

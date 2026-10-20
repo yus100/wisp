@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The panel's content: input bar, attachments and slash-command suggestions, the conversation (once
-/// there is one), and a footer. Reports its height so the window can grow and shrink around it.
+/// there is one) or the history list, and a footer. Reports its height so the window can grow and
+/// shrink around it.
 struct PanelView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var voice: VoiceController
@@ -15,17 +16,22 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             InputBar(model: model, voice: voice, onModelMenu: onModelMenu, onAttachMenu: onAttachMenu)
-            if !model.attachments.isEmpty {
-                AttachmentStrip(model: model)
-            }
-            if !model.suggestions.isEmpty {
-                SuggestionList(model: model)
-            }
-            if !model.conversation.isEmpty {
+            if model.isShowingHistory {
                 Divider().opacity(0.5)
-                ConversationView(conversation: model.conversation, maxHeight: layout.maxConversationHeight)
+                HistoryList(model: model, maxHeight: layout.maxConversationHeight)
+            } else {
+                if !model.attachments.isEmpty {
+                    AttachmentStrip(model: model)
+                }
+                if !model.suggestions.isEmpty {
+                    SuggestionList(model: model)
+                }
+                if !model.conversation.isEmpty {
+                    Divider().opacity(0.5)
+                    ConversationView(conversation: model.conversation, maxHeight: layout.maxConversationHeight)
+                }
             }
-            if !model.conversation.isEmpty || model.notice != nil {
+            if model.isShowingHistory || !model.conversation.isEmpty || model.notice != nil {
                 FooterView(model: model)
             }
         }

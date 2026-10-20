@@ -25,7 +25,7 @@ Everything builds with the Xcode Command Line Tools; Xcode itself is not needed.
 
 ## End-to-end smoke test
 
-`scripts/smoke-test.sh` drives the installed app through `Wisp ctl`. It types a question, checks the streamed answer, dictates a follow-up from a `say`-generated WAV (checking that context carries over), switches the model mid-conversation and back, runs a slash command picked from the suggestions, has the agent read an attached file, and checks the panel keys. It needs remote control, which is off by default:
+`scripts/smoke-test.sh` drives the installed app through `Wisp ctl`. It types a question, checks the streamed answer, dictates a follow-up from a `say`-generated WAV (checking that context carries over), switches the model mid-conversation and back, runs a slash command picked from the suggestions, has the agent read an attached file, filters the history and reopens a conversation from it, and checks the panel keys. It needs remote control, which is off by default:
 
 ```sh
 # in ~/.config/wisp/config.json
@@ -42,6 +42,7 @@ $APP ctl state /tmp/state.json     # panel state, turns, model list, notices
 $APP ctl snapshot /tmp/panel.png   # render the panel, no screen-recording permission needed*
 $APP ctl attach ~/notes.txt        # attach a file to the next question
 $APP ctl type "hello"; $APP ctl key return
+$APP ctl history; $APP ctl key down   # the history list (⌘Y)
 $APP ctl voice-file question.wav   # 16 kHz mono 16-bit WAV
 Resources/ghostty-grok --dry-run --cwd ~/code/app --prompt "fix it"
 ```

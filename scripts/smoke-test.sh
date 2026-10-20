@@ -1,6 +1,6 @@
 #!/bin/bash
 # End-to-end check of the installed, running app: typing, a streamed answer, voice from a synthesized
-# WAV, model switching, slash commands, attachments, and the panel keys. Costs a few model calls.
+# WAV, model switching, slash commands, attachments, history, and the panel keys. Costs a few model calls.
 #
 # Needs "remoteControl": true in ~/.config/wisp/config.json (Wisp ctl is off by default).
 set -euo pipefail
@@ -107,6 +107,49 @@ press cmd+n
 wait_idle
 [[ "$(field "d['turns'][-1]['answer']")" == *[Mm]armalade* ]] && pass "agent reads an attached file" || fail "attachment: $(field "d['turns'][-1]")"
 [ "$(field "d['turns'][-1]['attachments']")" = "['note.txt']" ] && pass "the turn lists its attachment" || fail "turn attachments: $(field "d['turns'][-1]['attachments']")"
+
+# History (⌘Y): the newest conversation is listed first, typing filters, esc goes back, and ↩ reopens a
+# conversation in the panel with its replayed turns and context.
+press cmd+n
+"$CTL" ctl ask "Remember the codeword quokka. Reply with only: noted"
+wait_idle
+session="$(field "d['sessionId']")"
+press cmd+n
+"$CTL" ctl history
+sleep 0.5
+state
+[ "$(field "d['history']['visible']")" = "True" ] && [ "$(field "d['history']['matches'][0]['id']")" = "$session" ] \
+  && pass "ctl history lists the newest conversation first" || fail "history: $(field "d['history']")"
+"$CTL" ctl type "zzqx"
+sleep 0.3
+state
+[ "$(field "len(d['history']['matches'])")" = "0" ] && [ -z "$(field "d['input']")" ] \
+  && pass "typing filters the list" || fail "filter: $(field "d['history']['filter']") input: $(field "d['input']")"
+press escape
+sleep 0.3
+state
+[ "$(field "d['history']['visible']")" = "False" ] && [ "$(field "d['visible']")" = "True" ] && [ "$(field "len(d['turns'])")" = "0" ] \
+  && pass "esc goes back to the conversation" || fail "esc from history: visible=$(field "d['visible']") turns=$(field "len(d['turns'])")"
+press cmd+y
+press down
+sleep 0.3
+state
+[ "$(field "d['history']['visible']")" = "True" ] && [ "$(field "d['history']['selected']")" = "1" ] \
+  && pass "⌘Y opens the list and ↓ moves" || fail "⌘Y/↓: $(field "d['history']['visible']") $(field "d['history']['selected']")"
+press up
+press return
+for _ in $(seq 1 40); do
+  sleep 0.25
+  state
+  [ "$(field "d['sessionId']")" = "$session" ] && [ "$(field "d['history']['reopening']")" = "None" ] && break
+done
+[ "$(field "d['sessionId']")" = "$session" ] && [ "$(field "d['history']['visible']")" = "False" ] \
+  && pass "↩ reopens it in the panel" || fail "reopen: session=$(field "d['sessionId']") notice=$(field "d['notice']")"
+[[ "$(field "d['turns'][0]['query']")" == *quokka* && "$(field "d['turns'][0]['answer']")" == *noted* ]] \
+  && pass "its turns are replayed" || fail "replayed: $(field "d['turns']")"
+"$CTL" ctl ask "What was the codeword? Reply with only the word."
+wait_idle
+[[ "$(field "d['turns'][-1]['answer']")" == *[Qq]uokka* ]] && pass "follow-ups continue it" || fail "follow-up: $(field "d['turns'][-1]")"
 
 press shift+return
 "$CTL" ctl type "x"

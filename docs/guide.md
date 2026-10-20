@@ -1,6 +1,6 @@
 # Wisp guide
 
-Everything beyond the [README](../README.md): shortcuts, attachments, slash commands, voice, coding sessions, settings, privacy, and fixes.
+Everything beyond the [README](../README.md): shortcuts, history, attachments, slash commands, voice, coding sessions, settings, privacy, and fixes.
 
 ## Shortcuts
 
@@ -18,12 +18,32 @@ Everything beyond the [README](../README.md): shortcuts, attachments, slash comm
 | **↑ ↓**, **Tab** | Move through the `/` suggestions and fill one in (**↩** does too) |
 | **⌘ M** | Choose the model and reasoning effort (or click the model chip) |
 | **⌘ N** | New conversation |
+| **⌘ Y** | History: earlier conversations, newest first (see [History](#history)) |
 | **⌘ .** | Stop the answer |
 | **⇧ ⌘ C** | Copy the last answer |
 | **⌘ ,** | Edit the settings file |
 | **esc** | Close, or stop listening |
 
-A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). Coming back to that answer restarts the idle timer below instead of starting fresh. After 10 idle minutes the next open starts fresh; the last 20 conversations stay under **Open Recent in Ghostty** in the menu bar.
+A conversation survives closing the panel, and an answer keeps streaming while it's closed. When one finishes there, the menu bar icon gets a dot and its menu offers **Show Answer**; macOS also shows a notification if it allows Wisp's (see [Notifications](#notifications)). Coming back to that answer restarts the idle timer below instead of starting fresh. After 10 idle minutes the next open starts fresh; earlier conversations stay in [History](#history).
+
+## History
+
+<p align="center">
+  <img src="assets/history.png" width="720" alt="The history list in Wisp">
+</p>
+
+**⌘ Y** swaps the conversation for a list of your last 100, newest first, each with its folder and when you last used it. Type to filter by title, then:
+
+| Keys | Action |
+| --- | --- |
+| **↑ ↓** | Move through the list |
+| **↩** | Reopen the conversation in the panel, with everything said so far; follow-ups continue it |
+| **⌘ ↩** | Open it in Ghostty instead (`grok --resume`) |
+| **esc** or **⌘ Y** | Back to the current conversation |
+
+Reopening loads the Grok Build session and replays its turns; if that fails, the conversation you were in stays as it was. The menu bar's **History…** opens the same list, and **Open Recent in Ghostty** lists the newest 20.
+
+Wisp keeps only pointers to the sessions (in `~/Library/Application Support/Wisp/history.json`); the conversations themselves stay in Grok Build's session files. A conversation whose session you deleted from `~/.grok/sessions` drops out of the list the next time it opens.
 
 ## Attachments
 
@@ -103,6 +123,7 @@ WISP=~/Applications/Wisp.app/Contents/MacOS/Wisp
 $WISP ctl toggle                    # show, hide, toggle: always available
 $WISP ctl ask "summarize the newest file in my Downloads"
 $WISP ctl attach ~/Desktop/plan.pdf     # goes with the next question
+$WISP ctl history                   # the history list; then ctl type, ctl key down/return/escape
 $WISP ctl state /tmp/state.json     # the panel's state as JSON
 $WISP ctl help                      # every command
 ```

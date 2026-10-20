@@ -19,8 +19,10 @@ struct FooterView: View {
             }
             Spacer(minLength: 8)
             if model.isShowingHistory {
-                hint("↩", "Open")
-                hint("⌘↩", "Ghostty")
+                if !model.historyMatches.isEmpty {
+                    hint("↩", "Open")
+                    hint("⌘↩", "Ghostty")
+                }
                 hint("esc", "Back")
             } else if !model.conversation.isEmpty {
                 if model.isWorking { hint("⌘.", "Stop") } else { hint("↩", "Send") }

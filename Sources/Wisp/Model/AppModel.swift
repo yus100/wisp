@@ -48,10 +48,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var isShowingHistory = false
     /// What is typed into the search field while the history list shows.
     @Published var historyFilter = "" {
-        didSet { if historyFilter != oldValue { selectedHistoryEntry = 0 } }
+        didSet { if historyFilter != oldValue { selectedHistoryID = nil } }
     }
-    /// The highlighted row of the history list.
-    @Published private(set) var selectedHistoryEntry = 0
+    /// The highlighted conversation in the history list; nil highlights the first match. Kept by ID, so a
+    /// refresh or a newly recorded conversation shifting the rows does not move it.
+    @Published private(set) var selectedHistoryID: String?
     /// A saved conversation being loaded back into the panel.
     @Published private(set) var reopening: SessionHistory.Entry?
 
@@ -79,7 +80,8 @@ final class AppModel: ObservableObject {
     private var ignoringUpdates = false
     /// Identifies the latest reopen from history; clearing it abandons that reopen.
     private var reopenAttempt: UUID?
-    private var reopenTask: Task<Void, Never>?
+    /// The latest `session/load` of each session reopened from history, until it finishes.
+    private var loads: [String: (attempt: UUID, task: Task<Void, Never>)] = [:]
     /// The turns `session/load` replays for the conversation being reopened.
     private var replayed: Conversation
 
@@ -375,12 +377,18 @@ final class AppModel: ObservableObject {
 
     var historyMatches: [SessionHistory.Entry] { history.matching(historyFilter) }
 
+    /// The highlighted row of the history list.
+    var highlightedHistoryEntry: SessionHistory.Entry? {
+        let matches = historyMatches
+        return matches.first { $0.id == selectedHistoryID } ?? matches.first
+    }
+
     /// ⌘Y: the saved conversations, newest first, in place of the current one.
-    /// `refreshing`: first drop sessions that are gone and adopt Grok Build's titles.
+    /// `refreshing`: first hide sessions that are gone and adopt Grok Build's titles.
     func showHistory(refreshing: Bool = true) {
         if voice.isActive { voice.cancel() }
         historyFilter = ""
-        selectedHistoryEntry = 0
+        selectedHistoryID = nil
         isShowingHistory = true
         focusRequest += 1
         if refreshing { refreshHistory() }
@@ -400,14 +408,15 @@ final class AppModel: ObservableObject {
     }
 
     func moveHistorySelection(by offset: Int) {
-        let count = historyMatches.count
-        guard count > 0 else { return }
-        selectedHistoryEntry = min(max(selectedHistoryEntry + offset, 0), count - 1)
+        let matches = historyMatches
+        guard !matches.isEmpty else { return }
+        let current = matches.firstIndex { $0.id == selectedHistoryID } ?? 0
+        selectedHistoryID = matches[min(max(current + offset, 0), matches.count - 1)].id
     }
 
     /// ↩ reopens the highlighted conversation in the panel; ⌘↩ resumes it in Ghostty.
     func openHighlightedHistory(inGhostty: Bool) {
-        guard let entry = historyMatches[safe: selectedHistoryEntry] else { return }
+        guard let entry = highlightedHistoryEntry, !isHandingOff else { return }
         if inGhostty {
             closeHistory()
             openRecent(entry)
@@ -416,7 +425,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Drops conversations whose Grok Build session is gone and adopts the titles Grok Build generated.
+    /// Hides conversations whose Grok Build session is gone and adopts the titles Grok Build generated.
     /// Waits for the login shell's environment, whose `GROK_HOME` can move the sessions.
     func refreshHistory() {
         guard let grokHome = host.resolvedGrokHome else {
@@ -427,37 +436,47 @@ final class AppModel: ObservableObject {
             return
         }
         history.refresh(grokHome: grokHome)
-        selectedHistoryEntry = min(selectedHistoryEntry, max(historyMatches.count - 1, 0))
     }
 
     /// Loads a saved conversation back into the panel with `session/load`. grok replays its turns before
     /// the load returns; they replace the current conversation only once it succeeds, so a failure, or
-    /// going back with esc meanwhile, leaves the current one as it was.
+    /// going back with esc meanwhile, leaves the current one as it was. What you had typed comes along.
     func reopen(_ entry: SessionHistory.Entry) {
+        guard !isHandingOff else { return }
         guard entry.id != sessionID else { return closeHistory() }
-        guard reopening?.id != entry.id else { return }
+        guard reopening?.id != entry.id, !isOpenInTerminal(entry) else { return }
+        guard !isWorking else {
+            notice = Notice("Still answering. Press ⌘. to stop it first.")
+            return
+        }
         let attempt = UUID()
         reopenAttempt = attempt
         reopening = entry
         notice = nil
-        let previous = reopenTask
-        reopenTask = Task {
-            // An abandoned load must finish first: its replay of the same session would mix into this one.
+        // An abandoned load of the same session must finish first, or its replay would mix into this one.
+        let previous = loads[entry.id]?.task
+        let task = Task {
+            defer { if loads[entry.id]?.attempt == attempt { loads[entry.id] = nil } }
             await previous?.value
             guard reopenAttempt == attempt else { return }
             do {
                 let agent = try await host.running()
                 guard reopenAttempt == attempt else { return }
                 replayed = Conversation(paths: paths)
-                try await agent.load(entry.id, in: entry.directory)
+                try await withDeadline(.seconds(60), "the conversation to load") {
+                    try await agent.load(entry.id, in: entry.directory)
+                }
                 guard reopenAttempt == attempt else {
-                    if sessionID != entry.id { await agent.close(entry.id) }
+                    // Abandoned while loading: unload it again, so a terminal can resume it alone.
+                    await agent.close(entry.id)
                     return
                 }
                 var loaded = replayed
                 loaded.endReplay()
                 replayed = Conversation(paths: paths)
+                let draft = (input, attachments)
                 newConversation()  // stops and unloads the current session, and ends this reopen
+                (input, attachments) = draft
                 conversation = loaded
                 sessionID = entry.id
                 sessionDirectory = entry.directory
@@ -465,14 +484,25 @@ final class AppModel: ObservableObject {
             } catch {
                 guard reopenAttempt == attempt else { return }
                 abandonReopen()
-                notice = Notice("Could not open “\(entry.title)”: \(error.localizedDescription)")
+                if !(error is CancellationError) {
+                    notice = Notice("Could not open “\(entry.title)”: \(error.localizedDescription)")
+                }
             }
         }
+        loads[entry.id] = (attempt, task)
     }
 
     private func abandonReopen() {
         reopenAttempt = nil
         reopening = nil
+    }
+
+    /// A conversation open in a Grok Build terminal session must not be opened again, here or in another
+    /// window: two processes would write one session.
+    private func isOpenInTerminal(_ entry: SessionHistory.Entry) -> Bool {
+        guard GrokSessionStore(grokHome: host.grokHome).isOpenInTerminal(entry.id) else { return false }
+        notice = Notice("That conversation is already open in Grok Build, probably in Ghostty.")
+        return true
     }
 
     // MARK: Ghostty
@@ -530,15 +560,17 @@ final class AppModel: ObservableObject {
     }
 
     func openRecent(_ entry: SessionHistory.Entry) {
-        if entry.id == sessionID {
-            continueInGhostty()
-        } else {
-            open(GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget))
-        }
+        if entry.id == sessionID { return continueInGhostty() }
+        guard !isOpenInTerminal(entry) else { return }
+        if reopening?.id == entry.id { abandonReopen() }
+        // A load of it here that was abandoned unloads it when done; the terminal must be its only writer.
+        let request = GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget)
+        open(request, after: loads[entry.id]?.task)
     }
 
-    private func open(_ request: GhosttyLauncher.Request) {
+    private func open(_ request: GhosttyLauncher.Request, after pending: Task<Void, Never>? = nil) {
         Task {
+            await pending?.value
             do {
                 try await launcher().open(request)
                 onRequestHide?()

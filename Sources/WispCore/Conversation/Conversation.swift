@@ -103,9 +103,8 @@ public struct Conversation: Equatable, Sendable {
     public mutating func replay(_ update: SessionUpdate) {
         switch update {
         case .userMessageChunk(let text, let promptIndex):
-            guard !text.isEmpty else { return }  // an image
-            // A question can arrive in several chunks. Without grok's index, a new question starts once the
-            // last one has output.
+            // A question can arrive in several chunks (text and images). Without grok's index, a new
+            // question starts once the last one has output.
             let sameQuestion = turns.last.map { last in
                 last.isRunning
                     && (promptIndex.map { $0 == last.replayedPromptIndex } ?? (last.answer.isEmpty && last.steps.isEmpty))
@@ -117,12 +116,27 @@ public struct Conversation: Equatable, Sendable {
             }
             let index = turns.count - 1
             turns[index].replayedPrompt += text
-            (turns[index].query, turns[index].attachments) = PromptComposer.parse(turns[index].replayedPrompt)
+            (turns[index].query, turns[index].attachments) = Self.question(replayed: turns[index].replayedPrompt)
         case .turnCompleted(let stopReason):
+            guard turns.last?.isRunning == true else { return }
             finish(stopReason: stopReason, model: nil)
         default:
             apply(update)
         }
+    }
+
+    /// What to show for a replayed prompt. Besides the user's questions, grok's terminal sessions hold
+    /// messages it sent in the user's place: background task events and reminders, and messages typed
+    /// while the agent was working.
+    static func question(replayed prompt: String) -> (question: String, attachments: [String]) {
+        if prompt.isEmpty { return ("Image", []) }
+        if prompt.hasPrefix("<system-reminder>") || prompt.hasPrefix("<monitor-event") { return ("Background update", []) }
+        if let start = prompt.range(of: "<user_query>\n"),
+            let end = prompt.range(of: "\n</user_query>", range: start.upperBound..<prompt.endIndex)
+        {
+            return (String(prompt[start.upperBound..<end.lowerBound]), [])
+        }
+        return PromptComposer.parse(prompt)
     }
 
     /// Ends a replayed turn that has no `turn_completed`, such as one cut off when the agent stopped.

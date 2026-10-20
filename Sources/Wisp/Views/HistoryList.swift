@@ -11,7 +11,7 @@ struct HistoryList: View {
     var body: some View {
         let entries = model.historyMatches
         if entries.isEmpty {
-            Text(model.history.entries.isEmpty ? "No conversations yet" : "No conversations match “\(model.historyFilter)”")
+            Text(model.history.available.isEmpty ? "No conversations yet" : "No conversations match “\(model.historyFilter)”")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -21,9 +21,10 @@ struct HistoryList: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
+                    let highlighted = model.highlightedHistoryEntry?.id
                     VStack(spacing: 2) {
-                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                            row(entry, selected: index == model.selectedHistoryEntry).id(entry.id)
+                        ForEach(entries) { entry in
+                            row(entry, selected: entry.id == highlighted).id(entry.id)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -37,8 +38,8 @@ struct HistoryList: View {
                         })
                 }
                 .frame(height: min(max(contentHeight, 40), maxHeight))
-                .onChange(of: model.selectedHistoryEntry) {
-                    if let entry = model.historyMatches[safe: model.selectedHistoryEntry] { proxy.scrollTo(entry.id) }
+                .onChange(of: model.selectedHistoryID) {
+                    if let entry = model.highlightedHistoryEntry { proxy.scrollTo(entry.id) }
                 }
             }
         }

@@ -105,6 +105,31 @@ import Testing
         #expect(conversation.turns.map(\.state) == [.finished, .finished])
     }
 
+    @Test func replayKeepsFailuresAndNoticesAndLabelsGrokMessages() {
+        var conversation = Conversation(paths: paths)
+        conversation.replay(.userMessageChunk("/context", promptIndex: 0))
+        conversation.replay(.turnCompleted(stopReason: "end_turn"))
+        conversation.replay(.turnCompleted(stopReason: "end_turn"))  // nothing running: leaves the notice alone
+        conversation.replay(.userMessageChunk("q", promptIndex: 1))
+        conversation.replay(.retry(.exhausted(reason: "Overloaded.")))
+        conversation.replay(.turnCompleted(stopReason: "error"))
+        conversation.replay(.userMessageChunk("<system-reminder>\nMonitor ended.\n</system-reminder>", promptIndex: 2))
+        conversation.replay(.messageChunk("The monitor finished."))
+        conversation.replay(
+            .userMessageChunk(
+                "The user sent a message while you were working:\n<user_query>\nhow far along?\n</user_query>\nIf the user…",
+                promptIndex: nil))
+        conversation.replay(.messageChunk("Halfway."))
+        conversation.replay(.userMessageChunk("", promptIndex: 3))  // an image on its own
+        conversation.replay(.messageChunk("A cat."))
+        conversation.endReplay()
+
+        #expect(conversation.turns.map(\.query) == ["/context", "q", "Background update", "how far along?", "Image"])
+        #expect(conversation.turns[0].notice?.hasPrefix("/context showed nothing here.") == true)
+        #expect(conversation.turns[1].state == .failed("Overloaded."))
+        #expect(conversation.turns.map(\.answer) == ["", "", "The monitor finished.", "Halfway.", "A cat."])
+    }
+
     @Test func liveTurnsIgnoreReplayOnlyUpdates() {
         var conversation = Conversation(paths: paths)
         conversation.begin("q")
@@ -159,7 +184,7 @@ import Testing
         try? FileManager.default.removeItem(at: root)
     }
 
-    @Test func refreshDropsMissingSessionsAndAdoptsGrokTitles() throws {
+    @Test func refreshHidesMissingSessionsAndAdoptsGrokTitles() throws {
         let grokHome = root.appending(path: ".grok")
         let folder = grokHome.appending(path: "sessions/%2FUsers%2Fme/s1")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -175,17 +200,47 @@ import Testing
         history.record("s2", title: "deleted in grok", directory: "/Users/me")
         history.record("s3", title: "no summary yet", directory: "/Users/me/" + String(repeating: "deep/", count: 60))
         history.refresh(grokHome: grokHome)
-        #expect(history.entries.map(\.id) == ["s3", "s1"])
-        #expect(history.entries.map(\.title) == ["no summary yet", "Codeword recall test"])
-        #expect(SessionHistory(file: file).entries.map(\.title) == ["no summary yet", "Codeword recall test"])
+        #expect(history.available.map(\.id) == ["s3", "s1"])
+        #expect(history.matching("").map(\.title) == ["no summary yet", "Codeword recall test"])
+        #expect(history.matching("deleted").isEmpty)
+        // Hidden, not forgotten: the file keeps every entry, with the adopted title.
+        #expect(history.entries.map(\.id) == ["s3", "s2", "s1"])
+        #expect(SessionHistory(file: file).entries.map(\.title) == ["no summary yet", "deleted in grok", "Codeword recall test"])
         try? FileManager.default.removeItem(at: root)
     }
 
-    @Test func refreshKeepsEverythingWithoutASessionsFolder() {
+    @Test func aWrongGrokHomeHidesEverythingUntilTheNextRefresh() throws {
+        let grokHome = root.appending(path: ".grok")
+        try FileManager.default.createDirectory(
+            at: grokHome.appending(path: "sessions/%2FUsers%2Fme/s1"), withIntermediateDirectories: true)
         var history = SessionHistory(file: root.appending(path: "history.json"))
         history.record("s1", title: "first", directory: "/Users/me")
         history.refresh(grokHome: root.appending(path: "wrong-grok-home"))
-        #expect(history.entries.map(\.id) == ["s1"])
+        #expect(history.available.isEmpty)
+        history.refresh(grokHome: grokHome)
+        #expect(history.available.map(\.id) == ["s1"])
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    @Test func sessionsOpenInATerminalAreRecognizedByLiveProcess() throws {
+        let grokHome = root.appending(path: ".grok")
+        try FileManager.default.createDirectory(at: grokHome, withIntermediateDirectories: true)
+        let me = ProcessInfo.processInfo.processIdentifier
+        let started = try #require(GrokSessionStore.startMicroseconds(of: me))
+        let active = """
+            [{"session_id":"open","pid":\(me),"pid_start":\(started),"cwd":"/Users/me"},
+             {"session_id":"old-grok","pid":\(me),"cwd":"/Users/me"},
+             {"session_id":"reused-pid","pid":\(me),"pid_start":\(started - 5_000_000),"cwd":"/Users/me"},
+             {"session_id":"exited","pid":99999999,"cwd":"/Users/me"}]
+            """
+        try Data(active.utf8).write(to: grokHome.appending(path: "active_sessions.json"))
+        let store = GrokSessionStore(grokHome: grokHome)
+        #expect(store.isOpenInTerminal("open"))
+        #expect(store.isOpenInTerminal("old-grok"))
+        #expect(!store.isOpenInTerminal("reused-pid"))
+        #expect(!store.isOpenInTerminal("exited"))
+        #expect(!store.isOpenInTerminal("never-opened"))
+        #expect(!GrokSessionStore(grokHome: root.appending(path: "missing")).isOpenInTerminal("open"))
         try? FileManager.default.removeItem(at: root)
     }
 

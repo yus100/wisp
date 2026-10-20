@@ -28,6 +28,8 @@ struct ConversationView: View {
                     })
             }
             .frame(height: min(max(contentHeight, 40), maxHeight))
+            // Coming back from the history list, or reopening a conversation, shows the latest answer.
+            .defaultScrollAnchor(.bottom)
             .onChange(of: conversation.turns.last?.answer) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
             .onChange(of: conversation.turns.count) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
         }

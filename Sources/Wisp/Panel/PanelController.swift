@@ -107,7 +107,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             model.contextApp = previousApp
             model.panelWillOpen()
             // An idle reset may just have cleared the conversation; open at the empty height, not the old one.
-            if model.conversation.isEmpty && model.notice == nil && !model.isShowingHistory { measuredHeight = emptyHeight }
+            if model.conversation.isEmpty && model.notice == nil { measuredHeight = emptyHeight }
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
             if let frame = screen?.visibleFrame {
                 layout.maxConversationHeight = max(200, frame.height * 0.62 - 120)
@@ -128,8 +128,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// click), hand focus back to the previous app. Not wanted when another app is already taking over.
     func hide(returnFocus: Bool = true) {
         if model.voice.isActive, model.voice.mode == .pushToTalk { model.voice.cancel() }
-        // A notice belongs to the moment it was seen in; closing the panel dismisses it.
-        if panel.isVisible { model.notice = nil }
+        // A notice belongs to the moment it was seen in, and the history list to a search; closing the
+        // panel dismisses both.
+        if panel.isVisible {
+            model.notice = nil
+            model.closeHistory()
+        }
         panel.orderOut(nil)
         removeKeyMonitor()
         stopWaitingForMouseUp()

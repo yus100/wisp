@@ -13,7 +13,11 @@ public struct SessionHistory: Sendable {
 
     public static let defaultLimit = 100
 
+    /// Everything saved, newest first, including sessions that are gone.
     public private(set) var entries: [Entry] = []
+    /// Sessions whose folder was missing at the last refresh. They stay saved, so a wrong `GROK_HOME`
+    /// cannot erase anything, but are left out of `available`.
+    private var missing: Set<String> = []
     private let file: URL
     private let limit: Int
 
@@ -35,35 +39,40 @@ public struct SessionHistory: Sendable {
             let short = title.count > 70 ? String(title.prefix(69)) + "…" : title
             entries.insert(Entry(id: sessionID, title: short, directory: directory, updatedAt: date), at: 0)
         }
+        missing.remove(sessionID)
         entries = Array(entries.prefix(limit))
         save()
     }
 
-    /// Entries whose title contains every word of `filter` (ignoring case and accents), newest first.
-    public func matching(_ filter: String) -> [Entry] {
-        let words = filter.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard !words.isEmpty else { return entries }
-        return entries.filter { entry in words.allSatisfy { entry.title.localizedStandardContains($0) } }
+    /// The conversations whose Grok Build session still exists (as of the last refresh), newest first.
+    public var available: [Entry] {
+        entries.filter { !missing.contains($0.id) }
     }
 
-    /// Drops entries whose Grok Build session folder is gone and swaps in the titles Grok Build generated,
-    /// which read better than the first question. Without a sessions folder at all (`grokHome` is
-    /// probably wrong), nothing is dropped.
+    /// Available entries whose title contains every word of `filter` (ignoring case and accents).
+    public func matching(_ filter: String) -> [Entry] {
+        let words = filter.split(whereSeparator: \.isWhitespace).map(String.init)
+        return available.filter { entry in words.allSatisfy { entry.title.localizedStandardContains($0) } }
+    }
+
+    /// Hides entries whose Grok Build session folder is gone (and shows them again if it is back), and
+    /// swaps in the titles Grok Build generated, which read better than the first question.
     public mutating func refresh(grokHome: URL) {
         let store = GrokSessionStore(grokHome: grokHome)
-        let canPrune = FileManager.default.fileExists(atPath: store.sessions.path)
-        var refreshed: [Entry] = []
-        for var entry in entries {
-            guard let folder = store.folder(of: entry.id, directory: entry.directory) else {
-                if !canPrune { refreshed.append(entry) }
+        var missing: Set<String> = []
+        var retitled = false
+        for index in entries.indices {
+            guard let folder = store.folder(of: entries[index].id, directory: entries[index].directory) else {
+                missing.insert(entries[index].id)
                 continue
             }
-            if let title = GrokSessionStore.title(in: folder) { entry.title = title }
-            refreshed.append(entry)
+            if let title = GrokSessionStore.title(in: folder), title != entries[index].title {
+                entries[index].title = title
+                retitled = true
+            }
         }
-        guard refreshed != entries else { return }
-        entries = refreshed
-        save()
+        self.missing = missing
+        if retitled { save() }
     }
 
     private func save() {
@@ -125,5 +134,39 @@ public struct GrokSessionStore: Sendable {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         return directory.addingPercentEncoding(withAllowedCharacters: allowed) ?? directory
+    }
+
+    /// Whether a running Grok Build terminal session (in Ghostty, say) has the session open, going by the
+    /// `active_sessions.json` grok keeps. `grok agent` does not list the sessions it loads.
+    public func isOpenInTerminal(_ sessionID: String) -> Bool {
+        struct Active: Decodable {
+            let sessionID: String
+            let pid: Int32
+            /// When the process started, in microseconds since 1970, so a reused pid does not count.
+            let pidStart: Int64?
+
+            enum CodingKeys: String, CodingKey {
+                case sessionID = "session_id"
+                case pid
+                case pidStart = "pid_start"
+            }
+        }
+        guard let data = try? Data(contentsOf: grokHome.appending(path: "active_sessions.json")),
+            let active = try? JSONDecoder().decode([Active].self, from: data)
+        else { return false }
+        return active.contains { entry in
+            guard entry.sessionID == sessionID, let started = Self.startMicroseconds(of: entry.pid) else { return false }
+            return entry.pidStart.map { abs($0 - started) < 1_000_000 } ?? true
+        }
+    }
+
+    /// When a running process started, or nil if there is no such process.
+    static func startMicroseconds(of pid: Int32) -> Int64? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard pid > 0, sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        return Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec)
     }
 }

@@ -108,13 +108,15 @@ wait_idle
 [[ "$(field "d['turns'][-1]['answer']")" == *[Mm]armalade* ]] && pass "agent reads an attached file" || fail "attachment: $(field "d['turns'][-1]")"
 [ "$(field "d['turns'][-1]['attachments']")" = "['note.txt']" ] && pass "the turn lists its attachment" || fail "turn attachments: $(field "d['turns'][-1]['attachments']")"
 
-# History (⌘Y): the newest conversation is listed first, typing filters, esc goes back, and ↩ reopens a
-# conversation in the panel with its replayed turns and context.
+# History (⌘Y): the newest conversation is listed first, typing filters without touching the draft, esc
+# goes back, and ↩ reopens a conversation in the panel with its replayed turns, context, and the draft.
 press cmd+n
 "$CTL" ctl ask "Remember the codeword quokka. Reply with only: noted"
 wait_idle
 session="$(field "d['sessionId']")"
 press cmd+n
+"$CTL" ctl type "draft"
+sleep 0.3
 "$CTL" ctl history
 sleep 0.5
 state
@@ -123,13 +125,14 @@ state
 "$CTL" ctl type "zzqx"
 sleep 0.3
 state
-[ "$(field "len(d['history']['matches'])")" = "0" ] && [ -z "$(field "d['input']")" ] \
+[ "$(field "len(d['history']['matches'])")" = "0" ] && [ "$(field "d['input']")" = "draft" ] \
   && pass "typing filters the list" || fail "filter: $(field "d['history']['filter']") input: $(field "d['input']")"
 press escape
 sleep 0.3
 state
 [ "$(field "d['history']['visible']")" = "False" ] && [ "$(field "d['visible']")" = "True" ] && [ "$(field "len(d['turns'])")" = "0" ] \
-  && pass "esc goes back to the conversation" || fail "esc from history: visible=$(field "d['visible']") turns=$(field "len(d['turns'])")"
+  && [ "$(field "d['input']")" = "draft" ] \
+  && pass "esc goes back to the conversation and its draft" || fail "esc from history: $(field "d['visible']") $(field "d['input']")"
 press cmd+y
 press down
 sleep 0.3
@@ -147,6 +150,7 @@ done
   && pass "↩ reopens it in the panel" || fail "reopen: session=$(field "d['sessionId']") notice=$(field "d['notice']")"
 [[ "$(field "d['turns'][0]['query']")" == *quokka* && "$(field "d['turns'][0]['answer']")" == *noted* ]] \
   && pass "its turns are replayed" || fail "replayed: $(field "d['turns']")"
+[ "$(field "d['input']")" = "draft" ] && pass "the draft comes along" || fail "draft: $(field "d['input']")"
 "$CTL" ctl ask "What was the codeword? Reply with only the word."
 wait_idle
 [[ "$(field "d['turns'][-1]['answer']")" == *[Qq]uokka* ]] && pass "follow-ups continue it" || fail "follow-up: $(field "d['turns'][-1]")"

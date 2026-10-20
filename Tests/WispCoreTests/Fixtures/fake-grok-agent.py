@@ -6,6 +6,7 @@ Prompt text selects a scenario:
   "permit"  asks the client for permission first and echoes the chosen option
   "permit-always-only"  offers only an always-allow option, which the client must decline
   "fs"      sends a request the client does not support and echoes the error code
+  "retry"   reports a retry and the turn's end the way grok does, as `_x.ai/session/update`
   "crash"   exits with status 3 mid-turn
 FAKE_AGENT_HANG=1 makes it never answer `initialize`.
 """
@@ -21,6 +22,10 @@ def send(message):
 
 def update(session_id, payload):
     send({"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": session_id, "update": payload}})
+
+
+def xai_update(session_id, payload):
+    send({"jsonrpc": "2.0", "method": "_x.ai/session/update", "params": {"sessionId": session_id, "update": payload}})
 
 
 def chunk(session_id, text):
@@ -77,6 +82,10 @@ for line in sys.stdin:
                     {"optionId": "always", "kind": "allow_always"},
                     {"optionId": "once", "kind": "allow_once"}]}})
             chunk(session_id, "approved:" + read_reply()["result"]["outcome"]["optionId"])
+        elif text == "retry":
+            xai_update(session_id, {"sessionUpdate": "retry_state", "type": "retrying", "attempt": 1, "max_retries": 3})
+            chunk(session_id, "ok")
+            xai_update(session_id, {"sessionUpdate": "turn_completed", "stop_reason": "end_turn"})
         elif text == "fs":
             send({"jsonrpc": "2.0", "id": 99, "method": "fs/read_text_file", "params": {"path": "/etc/hosts"}})
             chunk(session_id, "error:" + str(read_reply()["error"]["code"]))
@@ -94,8 +103,7 @@ for line in sys.stdin:
         update(session_id, {"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "earlier question"},
                             "_meta": {"promptIndex": 0}})
         chunk(session_id, "(replayed answer)")
-        send({"jsonrpc": "2.0", "method": "_x.ai/session/update", "params": {"sessionId": session_id, "update": {
-            "sessionUpdate": "turn_completed", "stop_reason": "end_turn"}}})
+        xai_update(session_id, {"sessionUpdate": "turn_completed", "stop_reason": "end_turn"})
         send({"jsonrpc": "2.0", "id": request_id, "result": {}})
     elif method == "session/close":
         send({"jsonrpc": "2.0", "id": request_id, "result": None})

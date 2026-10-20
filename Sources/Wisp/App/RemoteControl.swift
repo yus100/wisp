@@ -263,9 +263,9 @@ final class ControlServer {
             "history": [
                 "visible": model.isShowingHistory,
                 "filter": model.historyFilter,
-                "selected": model.selectedHistoryEntry,
+                "selected": model.historyMatches.firstIndex { $0.id == model.highlightedHistoryEntry?.id } ?? NSNull(),
                 "reopening": model.reopening?.id ?? NSNull(),
-                "count": model.history.entries.count,
+                "count": model.history.available.count,
                 "matches": model.historyMatches.map { ["id": $0.id, "title": $0.title, "directory": $0.directory] },
             ],
         ]

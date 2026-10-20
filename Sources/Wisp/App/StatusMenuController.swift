@@ -86,7 +86,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// The newest conversations; History… (⌘Y in the panel) searches all of them.
     private func recentItems() -> [NSMenuItem] {
         model.refreshHistory()
-        let items = model.history.entries.prefix(20).map { entry in
+        let items = model.history.available.prefix(20).map { entry in
             ActionItem(title: "\(entry.title)  ·  \(RelativeTime.describe(entry.updatedAt))") { [model] in
                 model.openRecent(entry)
             } as NSMenuItem

@@ -32,7 +32,7 @@ A conversation survives closing the panel, and an answer keeps streaming while i
   <img src="assets/history.png" width="720" alt="The history list in Wisp">
 </p>
 
-**⌘ Y** swaps the conversation for a list of your last 100, newest first, each with its folder and when you last used it. Type to filter by title, then:
+**⌘ Y** swaps the conversation for a list of your last 100, newest first, each with its folder and when you last asked something in it. Type to filter by title, then:
 
 | Keys | Action |
 | --- | --- |
@@ -41,9 +41,9 @@ A conversation survives closing the panel, and an answer keeps streaming while i
 | **⌘ ↩** | Open it in Ghostty instead (`grok --resume`) |
 | **esc** or **⌘ Y** | Back to the current conversation |
 
-Reopening loads the Grok Build session and replays its turns; if that fails, the conversation you were in stays as it was. The menu bar's **History…** opens the same list, and **Open Recent in Ghostty** lists the newest 20.
+Reopening loads the Grok Build session and replays its turns, and anything you had typed comes along. If it fails, the conversation you were in stays as it was. Wisp won't reopen a conversation while an answer is still streaming (**⌘ .** stops it), or one that is open in Grok Build in a terminal, since two copies would both write to it. Closing the panel closes the list too. The menu bar's **History…** opens the same list, and **Open Recent in Ghostty** lists the newest 20.
 
-Wisp keeps only pointers to the sessions (in `~/Library/Application Support/Wisp/history.json`); the conversations themselves stay in Grok Build's session files. A conversation whose session you deleted from `~/.grok/sessions` drops out of the list the next time it opens.
+Wisp keeps only pointers to the sessions (in `~/Library/Application Support/Wisp/history.json`); the conversations themselves stay in Grok Build's session files. A conversation whose session you deleted from `~/.grok/sessions` no longer shows up.
 
 ## Attachments
 

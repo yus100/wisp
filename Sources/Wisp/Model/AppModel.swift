@@ -82,6 +82,8 @@ final class AppModel: ObservableObject {
     private var reopenAttempt: UUID?
     /// The latest `session/load` of each session reopened from history, until it finishes.
     private var loads: [String: (attempt: UUID, task: Task<Void, Never>)] = [:]
+    /// Sessions being opened in Ghostty, until the terminal is up.
+    private var launchingInGhostty: Set<String> = []
     /// The turns `session/load` replays for the conversation being reopened.
     private var replayed: Conversation
 
@@ -457,15 +459,21 @@ final class AppModel: ObservableObject {
         let previous = loads[entry.id]?.task
         let task = Task {
             defer { if loads[entry.id]?.attempt == attempt { loads[entry.id] = nil } }
+            // The deadline only ends the attempt. The load itself runs on, so it can be unloaded when it returns.
+            let deadline = Task {
+                try await Task.sleep(for: .seconds(60))
+                guard reopenAttempt == attempt else { return }
+                abandonReopen()
+                notice = Notice("Could not open “\(entry.title)”: it took too long to load.")
+            }
+            defer { deadline.cancel() }
             await previous?.value
             guard reopenAttempt == attempt else { return }
             do {
                 let agent = try await host.running()
                 guard reopenAttempt == attempt else { return }
                 replayed = Conversation(paths: paths)
-                try await withDeadline(.seconds(60), "the conversation to load") {
-                    try await agent.load(entry.id, in: entry.directory)
-                }
+                try await agent.load(entry.id, in: entry.directory)
                 guard reopenAttempt == attempt else {
                     // Abandoned while loading: unload it again, so a terminal can resume it alone.
                     await agent.close(entry.id)
@@ -500,7 +508,8 @@ final class AppModel: ObservableObject {
     /// A conversation open in a Grok Build terminal session must not be opened again, here or in another
     /// window: two processes would write one session.
     private func isOpenInTerminal(_ entry: SessionHistory.Entry) -> Bool {
-        guard GrokSessionStore(grokHome: host.grokHome).isOpenInTerminal(entry.id) else { return false }
+        guard launchingInGhostty.contains(entry.id) || GrokSessionStore(grokHome: host.grokHome).isOpenInTerminal(entry.id)
+        else { return false }
         notice = Notice("That conversation is already open in Grok Build, probably in Ghostty.")
         return true
     }
@@ -564,19 +573,25 @@ final class AppModel: ObservableObject {
         guard !isOpenInTerminal(entry) else { return }
         if reopening?.id == entry.id { abandonReopen() }
         // A load of it here that was abandoned unloads it when done; the terminal must be its only writer.
-        let request = GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget)
-        open(request, after: loads[entry.id]?.task)
+        let pending = loads[entry.id]?.task
+        launchingInGhostty.insert(entry.id)
+        Task {
+            defer { launchingInGhostty.remove(entry.id) }
+            await pending?.value
+            await launch(GhosttyLauncher.Request(directory: entry.directory, resume: entry.id, target: config.ghosttyTarget))
+        }
     }
 
-    private func open(_ request: GhosttyLauncher.Request, after pending: Task<Void, Never>? = nil) {
-        Task {
-            await pending?.value
-            do {
-                try await launcher().open(request)
-                onRequestHide?()
-            } catch {
-                show(error)
-            }
+    private func open(_ request: GhosttyLauncher.Request) {
+        Task { await launch(request) }
+    }
+
+    private func launch(_ request: GhosttyLauncher.Request) async {
+        do {
+            try await launcher().open(request)
+            onRequestHide?()
+        } catch {
+            show(error)
         }
     }
 

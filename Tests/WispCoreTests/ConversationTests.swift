@@ -225,11 +225,21 @@ import Testing
     @Test func sessionsOpenInATerminalAreRecognizedByLiveProcess() throws {
         let grokHome = root.appending(path: ".grok")
         try FileManager.default.createDirectory(at: grokHome, withIntermediateDirectories: true)
+        // A live process named grok, for entries older grok versions wrote without a start time.
+        let grok = root.appending(path: "grok")
+        try FileManager.default.copyItem(at: URL(filePath: "/bin/sleep"), to: grok)
+        let sleeper = Process()
+        sleeper.executableURL = grok
+        sleeper.arguments = ["30"]
+        try sleeper.run()
+        defer { sleeper.terminate() }
+
         let me = ProcessInfo.processInfo.processIdentifier
-        let started = try #require(GrokSessionStore.startMicroseconds(of: me))
+        let started = try #require(GrokSessionStore.process(me)?.started)
         let active = """
             [{"session_id":"open","pid":\(me),"pid_start":\(started),"cwd":"/Users/me"},
-             {"session_id":"old-grok","pid":\(me),"cwd":"/Users/me"},
+             {"session_id":"old-grok","pid":\(sleeper.processIdentifier),"cwd":"/Users/me"},
+             {"session_id":"old-reused-pid","pid":\(me),"cwd":"/Users/me"},
              {"session_id":"reused-pid","pid":\(me),"pid_start":\(started - 5_000_000),"cwd":"/Users/me"},
              {"session_id":"exited","pid":99999999,"cwd":"/Users/me"}]
             """
@@ -237,6 +247,7 @@ import Testing
         let store = GrokSessionStore(grokHome: grokHome)
         #expect(store.isOpenInTerminal("open"))
         #expect(store.isOpenInTerminal("old-grok"))
+        #expect(!store.isOpenInTerminal("old-reused-pid"))
         #expect(!store.isOpenInTerminal("reused-pid"))
         #expect(!store.isOpenInTerminal("exited"))
         #expect(!store.isOpenInTerminal("never-opened"))

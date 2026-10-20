@@ -155,18 +155,20 @@ public struct GrokSessionStore: Sendable {
             let active = try? JSONDecoder().decode([Active].self, from: data)
         else { return false }
         return active.contains { entry in
-            guard entry.sessionID == sessionID, let started = Self.startMicroseconds(of: entry.pid) else { return false }
-            return entry.pidStart.map { abs($0 - started) < 1_000_000 } ?? true
+            guard entry.sessionID == sessionID, let process = Self.process(entry.pid) else { return false }
+            // Older grok versions record no start time; then at least the process must be a grok.
+            return entry.pidStart.map { abs($0 - process.started) < 1_000_000 } ?? process.name.hasPrefix("grok")
         }
     }
 
-    /// When a running process started, or nil if there is no such process.
-    static func startMicroseconds(of pid: Int32) -> Int64? {
+    /// A running process's start time (microseconds since 1970) and short name, or nil if there is none.
+    static func process(_ pid: Int32) -> (started: Int64, name: String)? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
-        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-        guard pid > 0, sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        var mib = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard pid > 0, sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
         let start = info.kp_proc.p_un.__p_starttime
-        return Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec)
+        let name = withUnsafeBytes(of: info.kp_proc.p_comm) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        return (Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec), name)
     }
 }

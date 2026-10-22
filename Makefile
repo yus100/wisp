@@ -20,6 +20,7 @@ app: build ## Assemble and sign build/Wisp.app
 	cp ".build/release/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	cp Resources/ghostty-grok Resources/AppIcon.icns "$(APP)/Contents/Resources/"
+	cp -R .build/release/Wisp_WispRendering.bundle "$(APP)/Contents/Resources/"
 	chmod +x "$(APP)/Contents/Resources/ghostty-grok"
 	# Signed (ad-hoc by default) with the bundle ID as designated requirement, so macOS privacy grants
 	# (microphone, files, Automation) survive rebuilds instead of being tied to one binary hash.

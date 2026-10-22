@@ -13,6 +13,7 @@ enum Screenshots {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let samples: [(String, Sample)] = [
                 ("panel.png", .init(conversation: diskSpace)),
+                ("math.png", .init(conversation: entropy)),
                 ("handoff.png", .init(conversation: devSession)),
                 ("context.png", .init(conversation: { Conversation(paths: $0) }, compose: researchWithContext)),
                 (
@@ -91,6 +92,26 @@ enum Screenshots {
 
                 About 14 GB of `~/Library` is Xcode's build cache. Want me to clear it?
                 """))
+        conversation.finish(stopReason: "end_turn", model: "grok-4-fast")
+        return conversation
+    }
+
+    private static func entropy(_ paths: WispPaths) -> Conversation {
+        var conversation = Conversation(paths: paths)
+        conversation.begin("What does entropy do in reinforcement learning?")
+        conversation.apply(
+            .messageChunk(
+                #"""
+                The policy \(\pi(a\mid s)\) assigns probabilities to actions. Its entropy measures how spread out those probabilities are:
+
+                \[H(\pi(\cdot\mid s))=-\sum_a \pi(a\mid s)\log\pi(a\mid s)\]
+
+                An entropy bonus rewards exploration alongside task reward:
+
+                \[J(\theta)=\mathbb E_{\tau\sim\pi_\theta}[\sum_{t=0}^{T-1}\gamma^t(r_t+\alpha H(\pi_\theta(\cdot\mid s_t)))]\]
+
+                **Higher entropy** means more varied actions; **lower entropy** means a more concentrated policy.
+                """#))
         conversation.finish(stopReason: "end_turn", model: "grok-4-fast")
         return conversation
     }

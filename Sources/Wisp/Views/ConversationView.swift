@@ -1,12 +1,13 @@
 import SwiftUI
 import WispCore
+import WispRendering
 
 /// The turns, scrolling once they outgrow the panel and following the newest text as it streams.
 struct ConversationView: View {
     let conversation: Conversation
     let maxHeight: CGFloat
     @State private var contentHeight: CGFloat = 0
-    @State private var hasScrolledToEnd = false
+    @State private var followedAnswers: [UUID: String]?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -20,6 +21,16 @@ struct ConversationView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
                 .padding(.bottom, 8)
+                .onPreferenceChange(RenderedAnswersKey.self) { rendered in
+                    let answers = Dictionary(
+                        uniqueKeysWithValues: conversation.turns.filter { !$0.answer.isEmpty }.map { ($0.id, $0.answer) })
+                    guard !answers.isEmpty, rendered.sorted() == answers.values.sorted(), followedAnswers != answers else {
+                        return
+                    }
+                    followedAnswers = answers
+                    // WebKit's final height must reach the scroll document before following its bottom.
+                    DispatchQueue.main.async { proxy.scrollTo(Self.bottom, anchor: .bottom) }
+                }
                 .background(
                     GeometryReader { geometry in
                         // Preferences do not reliably escape a ScrollView, so write the height directly.
@@ -30,9 +41,10 @@ struct ConversationView: View {
             }
             .frame(height: min(max(contentHeight, 40), maxHeight))
             .onChange(of: contentHeight) {
-                // Coming back from the history list, or reopening a conversation, shows the latest answer.
-                guard !hasScrolledToEnd, contentHeight > 0 else { return }
-                hasScrolledToEnd = true
+                guard followedAnswers == nil, contentHeight > 0, !conversation.turns.isEmpty,
+                    conversation.turns.allSatisfy({ $0.answer.isEmpty })
+                else { return }
+                followedAnswers = [:]
                 proxy.scrollTo(Self.bottom, anchor: .bottom)
             }
             .onChange(of: conversation.turns.last?.answer) { proxy.scrollTo(Self.bottom, anchor: .bottom) }

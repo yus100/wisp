@@ -23,6 +23,14 @@ Everything builds with the Xcode Command Line Tools; Xcode itself is not needed.
 - **Ghostty:** `GhosttyLauncherTests` runs the real `ghostty-grok` in `--dry-run` mode, including the exact heredoc form the agent is told to use.
 - **Everything else:** the conversation reducer, transcript stitching, Markdown, config, hotkey parsing (checked against Carbon's key codes), shell-environment parsing, credentials, history, and paths.
 
+### Answer renderer tests
+
+`swift test --filter AnswerRenderingTests` runs the bundled renderer in real offscreen WebKit views. It checks the RL entropy reproduction, all four delimiters, Markdown/code/currency, every streaming boundary, completed answers and conversation replay, malformed TeX, HTML safety, light/dark appearance, resizing, horizontal equation scrolling, text selection, and link activation. No browser driver or network service is required. To inspect supplementary render snapshots, set `WISP_RENDER_SNAPSHOTS=/tmp/wisp-render-snapshots` when running the tests.
+
+`swift test --filter ConversationIntegrationTests` checks the actual native scroll view and panel capture, including completed history, the final streaming chunk, manual scrolling through a resize, and equation pixels in both appearances. `WISP_LIVE_UI_TEST=1 swift test --filter LivePanelTests` additionally types/submits a question, observes streamed math, filters/reopens history, and copies the original answer through the real panel keyboard path with a deterministic local ACP fixture. The live test requires at least 45 seconds of user inactivity, aborts when input resumes, uses isolated configuration/history, and restores its clipboard and front-app changes. It never enables remote control. Run it alone while idle.
+
+The renderer's pinned dependencies and licenses live in `Sources/WispRendering/Resources/vendor`. `make app` copies their SwiftPM resource bundle into the signed app; keep this step when changing packaging.
+
 ## End-to-end smoke test
 
 `scripts/smoke-test.sh` drives the installed app through `Wisp ctl`. It types a question, checks the streamed answer, dictates a follow-up from a `say`-generated WAV (checking that context carries over), switches the model mid-conversation and back, runs a slash command picked from the suggestions, has the agent read an attached file, filters the history and reopens a conversation from it, and checks the panel keys. It needs remote control, which is off by default:

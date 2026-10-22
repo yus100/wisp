@@ -8,10 +8,12 @@ let package = Package(
         // Everything that does not need AppKit: the ACP client, agent process, conversation model,
         // speech-to-text client, Ghostty launcher, config, and parsing. Covered by WispCoreTests.
         .target(name: "WispCore"),
+        .target(name: "WispRendering", resources: [.copy("Resources")]),
+        .testTarget(name: "WispRenderingTests", dependencies: ["WispRendering", "WispCore"]),
         // The menu-bar app: panel, views, hotkeys, microphone, and the `ctl` remote control.
         .executableTarget(
             name: "Wisp",
-            dependencies: ["WispCore"],
+            dependencies: ["WispCore", "WispRendering"],
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AVFoundation"),
@@ -20,6 +22,7 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
             ]
         ),
+        .testTarget(name: "WispUITests", dependencies: ["Wisp", "WispCore"], resources: [.copy("Fixtures")]),
         .testTarget(
             name: "WispCoreTests",
             dependencies: ["WispCore"],

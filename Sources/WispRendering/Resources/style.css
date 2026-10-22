@@ -1,0 +1,39 @@
+:root {
+    color-scheme: light;
+    --foreground: #222;
+    --secondary: #606060;
+    --subtle: rgba(0, 0, 0, .06);
+    --border: rgba(0, 0, 0, .16);
+    --link: #0066cc;
+}
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --foreground: #eee;
+    --secondary: #b5b5b5;
+    --subtle: rgba(255, 255, 255, .06);
+    --border: rgba(255, 255, 255, .2);
+    --link: #7dbaff;
+}
+html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+body { color: var(--foreground); font: 14px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+#answer { display: flow-root; overflow-wrap: anywhere; min-width: 0; }
+p, pre, blockquote, ul, ol, table { margin: 0 0 7px; }
+#answer > :last-child { margin-bottom: 0; }
+h1, h2, h3, h4, h5, h6 { font-size: 14px; font-weight: 600; margin: 2px 0 7px; }
+a { color: var(--link); }
+code { font: 12.5px ui-monospace, Menlo, monospace; background: var(--subtle); border-radius: 3px; }
+pre { padding: 10px; background: var(--subtle); border-radius: 8px; overflow-x: auto; }
+pre code { background: none; white-space: pre; }
+blockquote { padding-left: 10px; margin-left: 0; color: var(--secondary); border-left: 3px solid var(--border); }
+ul, ol { padding-left: 22px; }
+li > p { margin-bottom: 3px; }
+hr { border: 0; border-top: 1px solid var(--border); }
+table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 2px 16px 3px 0; }
+th { border-bottom: 1px solid var(--border); }
+.katex { position: relative; font-size: 1.1em; }
+.katex-display, .math-display { display: block; margin: 7px 0; padding: 3px 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.katex-display > .katex { display: block; width: max-content; min-width: 100%; text-align: center; }
+.math-source { font: 12.5px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Long inline formulas can scroll without widening the native panel. */
+.katex:not(.katex-display > .katex) { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; padding: 2px 0; }

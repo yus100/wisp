@@ -4,12 +4,13 @@ Wisp is a thin, always-running shell around Grok Build. It never talks to a mode
 
 ## Layout
 
-The package has two targets, both built in Swift 6 language mode (strict concurrency).
+The package has three production targets, built in Swift 6 language mode (strict concurrency).
 
 | Target | What lives there |
 | --- | --- |
 | `WispCore` | Everything that does not need AppKit: the ACP client and agent process, the conversation reducer, speech-to-text, Ghostty launcher, config, and parsing. Covered by `WispCoreTests`. |
 | `Wisp` | The menu-bar app: panel window and SwiftUI views, hotkeys, microphone capture, the menu, and the `ctl` remote control. |
+| `WispRendering` | The answer view: WebKit, bundled Marked and KaTeX, styles and fonts. Covered by `WispRenderingTests`. |
 
 ```
 Sources/WispCore/
@@ -74,6 +75,12 @@ docs/assets/      README images (make icon, make screenshots)
 - **Saved files.** Window screenshots and pasted images go to `~/Library/Caches/Wisp/attachments`; files older than a week are removed in the background at launch and whenever the panel opens. Names carry a timestamp and a number when two land in the same second. Pasted and dropped files are referenced where they are.
 - **Slash commands.** grok sends `available_commands_update` after `session/new`: built-ins, skills, and workflows. Wisp decodes it leniently (a malformed entry is dropped, not the list), keeps the latest list in `commands.json` so suggestions work before the next session exists, and ranks matches in `SlashCommand.suggestions` (name prefix, then name, then description). Running one is just sending its text as the prompt.
 - **Silent commands.** Built-ins that open a view in grok's terminal UI (`/context`, `/memory`) finish over ACP without a word. `Conversation.finish` gives such a turn a notice that points to the Ghostty hand-off.
+
+## Answer rendering
+
+`MarkdownView` embeds `WispRendering.AnswerView` for both live turns and history replay. A transparent, nonpersistent `WKWebView` renders Markdown with bundled Marked and math with bundled KaTeX; scripts, styles, and fonts load locally from the signed app's resource bundle. Math tokens are recognized before Markdown escaping, while code spans and fenced/indented code retain their contents. Inline `\(...\)` and `$...$`, and display `\[...\]` and `$$...$$`, are supported. Single dollars use conservative whitespace/number rules to preserve ordinary prices; use `\(...\)` for ambiguous numeric expressions. Incomplete explicit delimiters and unsupported TeX remain readable source until they can be typeset.
+
+The view passes answer strings as JavaScript arguments, escapes raw HTML, filters link schemes, disables remote images and trusted TeX commands, and applies a restrictive Content Security Policy. Links open through `NSWorkspace`. Math includes accessible MathML. A `ResizeObserver` reports document height to SwiftUI after text, font, or width changes; long equations, code, and tables scroll horizontally within the answer. Appearance follows SwiftUI's color scheme. Copy-last-answer still copies the original Markdown/LaTeX from the conversation.
 
 ## Answers in the background
 

@@ -48,6 +48,11 @@ final class AppModel: ObservableObject {
     let voice = VoiceController()
     private(set) var history: SessionHistory
     private(set) var sessionID: String?
+    /// The last model and effort successfully sent to `appliedSession`, so a catalog refresh that
+    /// does not change them does not call `set_config_option` again.
+    private var appliedSession: String?
+    private var appliedModel: String?
+    private var appliedEffort: String?
 
     /// Hide the panel (after a hand-off opens Ghostty).
     var onRequestHide: (() -> Void)?
@@ -74,7 +79,7 @@ final class AppModel: ObservableObject {
         history = SessionHistory(file: paths.historyFile)
         commands = Self.loadCommands(from: paths.commandsFile)
         host.onSessionUpdate = { [weak self] in self?.apply($0) }
-        host.onCatalogChange = { [weak self] in self?.catalog = $0 }
+        host.onCatalogChange = { [weak self] in self?.catalogDidChange($0) }
         host.onUnexpectedExit = { [weak self] in self?.agentDied(status: $0) }
         configureVoice()
     }
@@ -281,16 +286,25 @@ final class AppModel: ObservableObject {
 
     // MARK: Model and effort
 
-    var effectiveModelID: String? { config.model.isEmpty ? catalog.defaultModelID : config.model }
+    /// The saved model when grok still offers it, otherwise the Grok Build default.
+    var effectiveModelID: String? { catalog.resolvedModelID(config.model) }
 
     var modelLabel: String {
         guard let model = effectiveModelID else { return "Default model" }
-        let name = catalog.name(of: model)
-        return config.reasoningEffort.isEmpty ? name : "\(name) · \(Self.effortLabel(config.reasoningEffort))"
+        let name = catalog.menuTitle(of: model)
+        guard let effort = displayedEffort(for: model) else { return name }
+        return "\(name) · \(catalog.effortLabel(effort, for: model))"
+    }
+
+    /// The effort the chip, the menu check, and the live session agree on for `modelID`.
+    /// Nil when that model is not the one in use, it has no reasoning control, or the preference is empty.
+    func displayedEffort(for modelID: String) -> String? {
+        guard modelID == effectiveModelID else { return nil }
+        return catalog.settings(savedModel: config.model, savedEffort: config.reasoningEffort).effort
     }
 
     static func effortLabel(_ effort: String) -> String {
-        effort == "xhigh" ? "Extra high" : effort.capitalized
+        ModelCatalog.fallbackEffortLabel(effort)
     }
 
     func selectModel(_ modelID: String) {
@@ -319,24 +333,60 @@ final class AppModel: ObservableObject {
     private func applyModelSettingsToSession() {
         objectWillChange.send()
         guard let sessionID else { return }
+        let session = sessionID
         Task {
             guard let agent = try? await host.running() else { return }
-            await applyModelSettings(to: sessionID, on: agent)
+            guard self.sessionID == session else { return }
+            await applyModelSettings(to: session, on: agent)
         }
     }
 
+    /// Pushes the chip's model and effort onto the session. A saved id the catalog does not list is
+    /// not sent; the session is moved to grok's default until that id appears. An effort the model
+    /// does not accept is replaced with one it does. Nothing is sent for a session that has since
+    /// been replaced, and that replacement is not told about a failure.
     private func applyModelSettings(to session: String, on agent: GrokAgent) async {
-        for (option, value) in [("model", config.model), ("reasoning_effort", config.reasoningEffort)] where !value.isEmpty {
+        if appliedSession != session {
+            appliedSession = session
+            appliedModel = nil
+            appliedEffort = nil
+        }
+        let choice = catalog.settings(savedModel: config.model, savedEffort: config.reasoningEffort)
+        if let model = choice.model, model != appliedModel {
+            guard sessionID == session else { return }
+            if model != config.model {
+                Log.info("saved model \(config.model) is not available; using \(model)")
+            }
             do {
-                try await agent.setOption(option, to: value, in: session)
+                try await agent.setOption("model", to: model, in: session)
+                guard sessionID == session else { return }
+                appliedModel = model
             } catch {
-                Log.info("could not set \(option)=\(value): \(error.localizedDescription)")
-                if option == "model" {
-                    notice = Notice("Could not switch to \(catalog.name(of: value)): \(error.localizedDescription)")
+                guard sessionID == session else { return }
+                Log.info("could not set model=\(model): \(error.localizedDescription)")
+                if model == config.model {
+                    notice = Notice("Could not switch to \(catalog.name(of: model)): \(error.localizedDescription)")
                 }
             }
         }
+        let effort = catalog.settings(savedModel: config.model, savedEffort: config.reasoningEffort).effort
+        if let effort, effort != appliedEffort {
+            guard sessionID == session else { return }
+            do {
+                try await agent.setOption("reasoning_effort", to: effort, in: session)
+                guard sessionID == session else { return }
+                appliedEffort = effort
+            } catch {
+                guard sessionID == session else { return }
+                Log.info("could not set reasoning_effort=\(effort): \(error.localizedDescription)")
+            }
+        }
         host.refreshCatalog()
+    }
+
+    private func catalogDidChange(_ catalog: ModelCatalog) {
+        self.catalog = catalog
+        applyModelSettingsToSession()
     }
 
     // MARK: Ghostty

@@ -54,6 +54,25 @@ for line in sys.stdin:
                  "_meta": {"reasoningEffort": "high", "reasoningEfforts": [{"value": "low"}, {"value": "high"}]}},
                 {"modelId": "claude-test", "name": "Claude Test", "_meta": {"reasoningEffort": "high", "reasoningEfforts": []}},
             ]}}}})
+        # A partial handshake list, then the full catalog, then an empty refresh that must not wipe it.
+        if os.environ.get("FAKE_MODELS_UPDATE"):
+            send({"jsonrpc": "2.0", "method": "_x.ai/models/update", "params": {
+                "currentModelId": "grok-test",
+                "availableModels": [
+                    {"modelId": "grok-test", "name": "Grok Test", "_meta": {
+                        "group": "Grok", "supportsReasoningEffort": True, "reasoningEffort": "high",
+                        "reasoningEfforts": [
+                            {"value": "low", "label": "Low"}, {"value": "xhigh", "label": "Extra High"}]}},
+                    {"name": "malformed"},
+                    {"modelId": "claude-opus", "name": "Claude Opus", "_meta": {
+                        "group": "Anthropic", "supportsReasoningEffort": True, "reasoningEffort": "medium",
+                        "reasoningEfforts": [
+                            {"value": "medium", "label": "Medium"}, {"value": "max", "label": "Max"}]}},
+                    {"modelId": "gemini-test", "name": "Gemini Test",
+                     "_meta": {"totalContextTokens": 1000000, "vendor": {"displayName": "Google"}}},
+                    {"modelId": "grok-test", "name": "Duplicate"},
+                ]}})
+            send({"jsonrpc": "2.0", "method": "_x.ai/models/update", "params": {"availableModels": []}})
     elif method == "session/new":
         assert params["_meta"]["yoloMode"] is True
         send({"jsonrpc": "2.0", "id": request_id, "result": {"sessionId": "session-1", "configOptions": options(model)}})

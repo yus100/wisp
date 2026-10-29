@@ -18,7 +18,8 @@ Everything builds with the Xcode Command Line Tools; Xcode itself is not needed.
 
 `WispCoreTests` uses Swift Testing and covers the core without mocks where it can:
 
-- **Agent:** `GrokAgentTests` runs `GrokAgent` against `Tests/WispCoreTests/Fixtures/fake-grok-agent.py`, a stand-in that speaks enough ACP to exercise the real process, pipes, framing, ordering, permission and unsupported requests, model switching, `session/load`, and crashes.
+- **Agent:** `GrokAgentTests` runs `GrokAgent` against `Tests/WispCoreTests/Fixtures/fake-grok-agent.py`, a stand-in that speaks enough ACP to exercise the real process, pipes, framing, ordering, permission and unsupported requests, model switching, catalog updates, `session/load`, and crashes.
+- **Panel:** `WispUITests` checks prompt-deletion editing and the model menu against an offscreen text view. `WISP_LIVE_UI_TEST=1 swift test --filter LiveComposerTests` also types into the real panel and checks the model menu against a fixture catalog. It runs only after 45 seconds of user inactivity, stops if input resumes, uses an isolated config and history, and restores the frontmost app. It does not enable remote control. Run it alone while idle.
 - **Voice:** `SpeechToTextStreamTests` runs the WebSocket client against a local Network.framework server that behaves like xAI speech-to-text, including errors and a silent server.
 - **Ghostty:** `GhosttyLauncherTests` runs the real `ghostty-grok` in `--dry-run` mode, including the exact heredoc form the agent is told to use.
 - **Everything else:** the conversation reducer, transcript stitching, Markdown, config, hotkey parsing (checked against Carbon's key codes), shell-environment parsing, credentials, history, and paths.

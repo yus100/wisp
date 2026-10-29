@@ -13,25 +13,49 @@ enum ModelMenu {
 
     static func addItems(to menu: NSMenu, for model: AppModel) {
         let current = model.effectiveModelID
-        menu.addItem(.sectionHeader(title: "Model"))
-        if model.catalog.models.isEmpty {
+        let catalog = model.catalog
+        if catalog.models.isEmpty {
+            menu.addItem(.sectionHeader(title: "Model"))
             let loading = NSMenuItem(title: "Loading models…", action: nil, keyEquivalent: "")
             loading.isEnabled = false
             menu.addItem(loading)
-        }
-        for option in model.catalog.models {
-            let suffix = option.id == model.catalog.defaultModelID ? "   (Grok Build default)" : ""
-            menu.addItem(ActionItem(title: option.name + suffix, checked: option.id == current) { model.selectModel(option.id) })
+        } else if catalog.models.allSatisfy({ $0.group == nil }) {
+            menu.addItem(.sectionHeader(title: "Model"))
+            for option in catalog.models { menu.addItem(modelItem(option, current: current, catalog: catalog, model: model)) }
+        } else {
+            var lastGroup: String?
+            for option in catalog.models {
+                let group = option.group ?? "Model"
+                if group != lastGroup {
+                    menu.addItem(.sectionHeader(title: group))
+                    lastGroup = group
+                }
+                menu.addItem(modelItem(option, current: current, catalog: catalog, model: model))
+            }
         }
         guard let current else { return }
+        let efforts = catalog.efforts(for: current)
+        guard !efforts.isEmpty else { return }
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Reasoning effort"))
-        for effort in model.catalog.efforts(for: current) {
+        let shown = model.displayedEffort(for: current)
+        for effort in efforts {
             menu.addItem(
-                ActionItem(title: AppModel.effortLabel(effort), checked: effort == model.config.reasoningEffort) {
+                ActionItem(title: catalog.effortLabel(effort, for: current), checked: effort == shown) {
                     model.selectEffort(effort)
                 })
         }
+    }
+
+    private static func modelItem(
+        _ option: ModelCatalog.Model, current: String?, catalog: ModelCatalog, model: AppModel
+    ) -> NSMenuItem {
+        let suffix = option.id == catalog.defaultModelID ? "   (Grok Build default)" : ""
+        let item = ActionItem(title: catalog.menuTitle(of: option.id) + suffix, checked: option.id == current) {
+            model.selectModel(option.id)
+        }
+        item.toolTip = option.id
+        return item
     }
 }
 

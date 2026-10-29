@@ -258,6 +258,21 @@ final class PanelController: NSObject, NSWindowDelegate {
             break
         }
 
+        // ⌘U / ⌃U / ⌃W. Checked after Return and the suggestion keys so those keep working, and skipped
+        // while an input method is composing so the key still confirms or edits the marked text.
+        if !model.isHandingOff, let editor,
+            let action = PromptEditing.deletion(
+                key: event.charactersIgnoringModifiers ?? "",
+                command: flags.contains(.command),
+                control: flags.contains(.control),
+                option: flags.contains(.option),
+                shift: flags.contains(.shift),
+                composing: composing)
+        {
+            PromptEditing.apply(action, to: editor)
+            return true
+        }
+
         guard flags.contains(.command) else { return false }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "n": model.newConversation()

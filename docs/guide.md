@@ -15,6 +15,8 @@ Everything beyond the [README](../README.md): shortcuts, attachments, slash comm
 | **⌘ ⇧ A** | Attach a screenshot of the window you were in when you opened Wisp |
 | **⌘ O** | Choose files or folders to attach |
 | **⌘ V** | Paste text; copied files and images become attachments |
+| **⌘ U** or **⌃ U** | Delete back to the start of the prompt |
+| **⌃ W** | Delete the word before the cursor |
 | **↑ ↓**, **Tab** | Move through the `/` suggestions and fill one in (**↩** does too) |
 | **⌘ M** | Choose the model and reasoning effort (or click the model chip) |
 | **⌘ N** | New conversation |
@@ -66,8 +68,8 @@ Hold **⌥ Space** to talk and let go to send, or press **⌥ ⇧ Space** to dic
 | --- | --- | --- |
 | `hotkey` | `option+space` | Tap to toggle Wisp, hold to talk |
 | `voiceHotkey` | `option+shift+space` | Hands-free voice |
-| `model` | `""` | Model for quick answers (set it with ⌘ M); empty uses your Grok Build default |
-| `reasoningEffort` | `low` | `minimal`, `low`, `medium`, `high`, or `xhigh` (set it with ⌘ M); empty uses the model's default |
+| `model` | `""` | Model for quick answers (set it with ⌘ M). Empty uses your Grok Build default. The menu lists the models Grok Build offers for this login, including third-party ones. A saved id that is no longer offered is left unused and the default is shown |
+| `reasoningEffort` | `low` | Effort for models that accept one. ⌘ M lists that model's own levels; empty, or a model with no reasoning control, uses the model's default |
 | `workingDirectory` | `~` | Folder quick answers run in |
 | `idleResetMinutes` | `10` | Start fresh after this much idle time; `0` never resets |
 | `voiceLanguage` | `en` | Speech-to-text language code |

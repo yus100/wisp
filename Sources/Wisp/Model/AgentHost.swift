@@ -111,6 +111,7 @@ final class AgentHost {
         launching = agent
         defer { if launching === agent { launching = nil } }
         agent.onSessionUpdate = { [weak self] in self?.onSessionUpdate?($0) }
+        agent.onCatalogChange = { [weak self] in self?.publishCatalog($0) }
         agent.onUnexpectedExit = { [weak self, weak agent] status in
             guard let self, let agent, agent === self.agent else { return }
             self.agent = nil

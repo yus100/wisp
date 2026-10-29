@@ -32,6 +32,8 @@ public final class GrokAgent {
 
     /// Streamed updates for any session on this agent.
     public var onSessionUpdate: ((SessionNotification) -> Void)?
+    /// The model list changed after the handshake (`_x.ai/models/update`, or a session that carried one).
+    public var onCatalogChange: ((ModelCatalog) -> Void)?
     /// The process exited without `stop()` being called.
     public var onUnexpectedExit: ((Int32) -> Void)?
 
@@ -39,6 +41,9 @@ public final class GrokAgent {
     private var process: Process?
     private var connection: ACPConnection?
     private var stopping = false
+    /// Bumped when a catalog update changes the list. The handshake assignment must not clobber one
+    /// that arrived in the same burst as the initialize reply.
+    private var catalogRevision = 0
 
     public init(launch: Launch) {
         self.launch = launch
@@ -96,13 +101,16 @@ public final class GrokAgent {
 
         do {
             let clientVersion = launch.clientVersion
+            // A catalog update can be applied while this request is suspended (it often arrives in the
+            // same burst as the reply). Keep that list instead of putting the handshake snapshot back.
+            let revision = catalogRevision
             let result = try await withDeadline(launch.startTimeout, "grok to start") {
                 try await connection.request(
                     "initialize",
                     params: InitializeParams(clientInfo: .init(name: "wisp", version: clientVersion)),
                     as: InitializeResult.self)
             }
-            catalog = ModelCatalog(result)
+            if catalogRevision == revision { catalog = ModelCatalog(result) }
         } catch {
             stop()
             throw error
@@ -123,7 +131,10 @@ public final class GrokAgent {
             "session/new",
             params: NewSessionParams(cwd: directory, meta: .init(yoloMode: true, rules: rules)),
             as: NewSessionResult.self)
-        if let options = result.configOptions { catalog.learn(from: options) }
+        noteCatalogChange {
+            if let state = result.models { catalog.apply(modelState: state) }
+            if let options = result.configOptions { catalog.learn(from: options) }
+        }
         return result
     }
 
@@ -163,7 +174,9 @@ public final class GrokAgent {
             "session/set_config_option",
             params: SetConfigOptionParams(sessionId: sessionID, configId: configID, value: value),
             as: SetConfigOptionResult.self)
-        if let options = result.configOptions { catalog.learn(from: options) }
+        noteCatalogChange {
+            if let options = result.configOptions { catalog.learn(from: options) }
+        }
     }
 
     // MARK: Private
@@ -176,6 +189,12 @@ public final class GrokAgent {
     private func handle(_ message: ACPConnection.Incoming, on connection: ACPConnection) async {
         let decoder = JSONDecoder()
         switch message {
+        case .notification(let method, let data) where method == "_x.ai/models/update" || method == "x.ai/models/update":
+            guard let update = ModelsUpdate.decode(message: data) else {
+                Log.info("ignored a malformed model catalog update")
+                return
+            }
+            noteCatalogChange { catalog.apply(modelState: update.state) }
         case .notification(let method, let data) where method == "session/update" || method == "_x.ai/session_notification":
             guard let notification = try? decoder.decode(IncomingParams<SessionNotification>.self, from: data).params else {
                 return
@@ -196,6 +215,14 @@ public final class GrokAgent {
             Log.info("acp: declined unsupported agent request \(method)")
             await connection.respond(to: id, errorCode: -32601, message: "Wisp does not support \(method)")
         }
+    }
+
+    private func noteCatalogChange(_ change: () -> Void) {
+        let before = catalog
+        change()
+        guard catalog != before else { return }
+        catalogRevision += 1
+        onCatalogChange?(catalog)
     }
 
     private func processDidExit(_ status: Int32) {

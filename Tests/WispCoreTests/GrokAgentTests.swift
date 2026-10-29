@@ -112,6 +112,20 @@ import Testing
         #expect(ContinuousClock.now - start < .seconds(3))
     }
 
+    @Test func modelUpdateReplacesAPartialCatalogAndIgnoresAnEmptyOne() async throws {
+        let (agent, _) = try await startAgent(environment: ["FAKE_MODELS_UPDATE": "1"])
+        defer { agent.stop() }
+        try await waitFor { await MainActor.run { agent.catalog.contains("gemini-test") } }
+        let catalog = await MainActor.run { agent.catalog }
+        #expect(catalog.models.map(\.id) == ["grok-test", "claude-opus", "gemini-test"])
+        #expect(catalog.models.map(\.group) == ["Grok", "Anthropic", "Google"])
+        #expect(catalog.efforts(for: "claude-opus") == ["medium", "max"])
+        #expect(catalog.effortLabel("max", for: "claude-opus") == "Max")
+        #expect(catalog.effortLabel("xhigh", for: "grok-test") == "Extra High")
+        #expect(catalog.efforts(for: "gemini-test").isEmpty)
+        #expect(catalog.defaultModelID == "grok-test")
+    }
+
     @Test func stopIsNotReportedAsACrash() async throws {
         let (agent, recorder) = try await startAgent()
         agent.stop()
@@ -132,10 +146,44 @@ import Testing
         #expect(catalog.efforts(for: "claude") == ModelCatalog.fallbackEfforts)
         catalog.learn(from: [
             ConfigOption(id: "model", currentValue: "claude", values: []),
-            ConfigOption(id: "reasoning_effort", currentValue: "low", values: ["minimal", "low"]),
+            ConfigOption(
+                id: "reasoning_effort", currentValue: "low", values: ["minimal", "low"], labels: ["minimal": "Least"]),
         ])
         #expect(catalog.efforts(for: "claude") == ["minimal", "low"])
+        #expect(catalog.effortLabel("minimal", for: "claude") == "Least")
         #expect(catalog.efforts(for: "grok") == ["xhigh", "high", "medium"])
+        catalog.learn(from: [
+            ConfigOption(id: "model", currentValue: "claude", values: []),
+            ConfigOption(id: "reasoning_effort", currentValue: nil, values: []),
+        ])
+        #expect(catalog.efforts(for: "claude") == ModelCatalog.fallbackEfforts)
+    }
+
+    @Test func modelsWithoutReasoningIgnoreSessionLevels() {
+        var catalog = ModelCatalog(
+            models: [.init(id: "gemini", name: "Gemini", supportsReasoning: false, group: "Google")],
+            defaultModelID: "gemini")
+        catalog.learn(from: [
+            ConfigOption(id: "model", currentValue: "gemini", values: []),
+            ConfigOption(id: "reasoning_effort", currentValue: "low", values: ["low", "high"], labels: ["low": "Low"]),
+        ])
+        #expect(catalog.efforts(for: "gemini").isEmpty)
+        #expect(catalog.settings(savedModel: "gemini", savedEffort: "high") == (model: "gemini", effort: nil))
+    }
+
+    @Test func sessionSettingsFollowTheChipWhenTheCatalogChanges() {
+        let catalog = ModelCatalog(
+            models: [
+                .init(id: "grok", name: "Grok", efforts: ["low", "high"], defaultEffort: "high", supportsReasoning: true),
+                .init(
+                    id: "claude", name: "Claude", efforts: ["medium", "max"], defaultEffort: "medium", supportsReasoning: true),
+            ],
+            defaultModelID: "grok")
+        #expect(catalog.settings(savedModel: "claude", savedEffort: "medium") == (model: "claude", effort: "medium"))
+        #expect(catalog.settings(savedModel: "claude", savedEffort: "xhigh") == (model: "claude", effort: "medium"))
+        #expect(catalog.settings(savedModel: "retired", savedEffort: "high") == (model: "grok", effort: "high"))
+        #expect(catalog.settings(savedModel: "retired", savedEffort: "xhigh") == (model: "grok", effort: "low"))
+        #expect(catalog.settings(savedModel: "", savedEffort: "high") == (model: nil, effort: "high"))
     }
 
     @Test func effortAdjustsToWhatTheModelAccepts() {
@@ -143,10 +191,66 @@ import Testing
         #expect(catalog.effort("low", adjustedFor: "grok") == "high")
         #expect(catalog.effort("minimal", adjustedFor: "claude") == "low")
         #expect(catalog.effort("", adjustedFor: "grok") == "")
+        #expect(catalog.effortLabel("xhigh", for: "grok") == "Extra high")
     }
 
     @Test func namesFallBackToIDs() {
         #expect(catalog.name(of: "grok") == "Grok")
         #expect(catalog.name(of: "unknown-model") == "unknown-model")
+    }
+
+    @Test func thirdPartyCatalogKeepsLabelsGroupsAndDropsBadRows() throws {
+        let result = try JSONDecoder().decode(
+            InitializeResult.self,
+            from: Data(
+                #"""
+                {"_meta":{"modelState":{"currentModelId":" grok-4.7 ","availableModels":[
+                  {"modelId":"grok-4.7","name":"Grok 4.7","_meta":{"supportsReasoningEffort":true,"reasoningEffort":"high",
+                    "reasoningEfforts":["low",{"value":"xhigh","label":"Extra High"},{"label":"skip"},5]}},
+                  {"name":"malformed"},
+                  {"modelId":"claude-opus-5-5","name":"Claude Opus 5.5","_meta":{"group":"Anthropic",
+                    "reasoningEfforts":[{"id":"max","label":"Max"}]}},
+                  {"modelId":"gemini-4-argon","name":"Gemini 4 Argon","_meta":{"vendor":{"displayName":"Google"}}},
+                  {"modelId":"composer-2.5","name":"Composer 2.5","_meta":{"supportsReasoningEffort":false}},
+                  {"modelId":"cursor-helios-alpha","name":"Cursor Helios Alpha"},
+                  {"modelId":"cursor-helios-alpha-staging","name":"Cursor Helios Alpha"},
+                  {"modelId":"grok-4.7","name":"Duplicate"}
+                ]}}}
+                """#.utf8))
+        let decoded = ModelCatalog(result)
+        #expect(decoded.defaultModelID == "grok-4.7")
+        #expect(
+            decoded.models.map(\.id) == [
+                "grok-4.7", "claude-opus-5-5", "gemini-4-argon", "composer-2.5", "cursor-helios-alpha",
+                "cursor-helios-alpha-staging",
+            ])
+        #expect(decoded.efforts(for: "grok-4.7") == ["low", "xhigh"])
+        #expect(decoded.effortLabel("xhigh", for: "grok-4.7") == "Extra High")
+        #expect(decoded.efforts(for: "claude-opus-5-5") == ["max"])
+        #expect(decoded.effortLabel("max", for: "claude-opus-5-5") == "Max")
+        #expect(decoded.models.first { $0.id == "claude-opus-5-5" }?.group == "Anthropic")
+        #expect(decoded.models.first { $0.id == "gemini-4-argon" }?.group == "Google")
+        #expect(decoded.efforts(for: "gemini-4-argon").isEmpty)
+        #expect(decoded.efforts(for: "composer-2.5").isEmpty)
+        #expect(decoded.effort("low", adjustedFor: "composer-2.5") == "low")
+        #expect(decoded.menuTitle(of: "cursor-helios-alpha") == "Cursor Helios Alpha · cursor-helios-alpha")
+        #expect(decoded.menuTitle(of: "grok-4.7") == "Grok 4.7")
+        #expect(decoded.resolvedModelID("retired-model") == "grok-4.7")
+        #expect(decoded.resolvedModelID("") == "grok-4.7")
+        #expect(decoded.resolvedModelID("claude-opus-5-5") == "claude-opus-5-5")
+
+        var updated = decoded
+        let empty = try JSONDecoder().decode(InitializeResult.ModelState.self, from: Data(#"{"availableModels":[]}"#.utf8))
+        updated.apply(modelState: empty)
+        #expect(updated.models.map(\.id) == decoded.models.map(\.id))
+
+        let session = try JSONDecoder().decode(
+            NewSessionResult.self,
+            from: Data(
+                #"{"sessionId":"s","models":"not-a-catalog","configOptions":[{"id":"model","currentValue":"grok-4.7","options":[]}]}"#
+                    .utf8))
+        #expect(session.sessionId == "s")
+        #expect(session.models == nil)
+        #expect(session.configOptions?.map(\.id) == ["model"])
     }
 }

@@ -71,6 +71,7 @@ Then tap **⌥ Space**. Wisp starts when you log in, so the hotkey is always the
 | **↩** | Send (follow-ups keep the context) |
 | **⌘ ⇧ A** | Attach the window you were in |
 | **⌘ V** | Paste text, or attach copied files and images |
+| **⌘ U** | Delete back to the start of the prompt |
 | **/** | Commands, skills, and workflows; **Tab** fills one in |
 | **⌘ ↩** | Continue in Ghostty, or start a dev session for what you typed |
 | **⌘ M** | Pick the model and reasoning effort |

@@ -25,5 +25,10 @@ let package = Package(
             dependencies: ["WispCore"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(
+            name: "WispUITests",
+            dependencies: ["Wisp", "WispCore"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )

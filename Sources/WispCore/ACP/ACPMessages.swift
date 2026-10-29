@@ -30,21 +30,127 @@ struct InitializeParams: Encodable, Sendable {
 struct InitializeResult: Decodable, Sendable {
     struct Meta: Decodable, Sendable {
         let modelState: ModelState?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // A malformed catalog must not fail the handshake; the update notification can replace it.
+            modelState = (try? container.decodeIfPresent(ModelState.self, forKey: .modelState)) ?? nil
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case modelState
+        }
     }
 
     struct ModelState: Decodable, Sendable {
         let currentModelId: String?
         let availableModels: [AvailableModel]?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            currentModelId = (try? container.decodeIfPresent(String.self, forKey: .currentModelId)) ?? nil
+            availableModels = Self.models(in: container)
+        }
+
+        /// One bad row is dropped. grok does the same ("ignoring malformed value") instead of failing the list.
+        private static func models(in container: KeyedDecodingContainer<CodingKeys>) -> [AvailableModel] {
+            guard var rows = try? container.nestedUnkeyedContainer(forKey: .availableModels) else { return [] }
+            var models: [AvailableModel] = []
+            while !rows.isAtEnd {
+                guard let row = try? rows.decode(LossyDecodable<AvailableModel>.self) else { break }
+                if let model = row.value { models.append(model) }
+            }
+            return models
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case currentModelId, availableModels
+        }
     }
 
     struct AvailableModel: Decodable, Sendable {
         struct Meta: Decodable, Sendable {
-            struct Effort: Decodable, Sendable {
+            struct Effort: Decodable, Sendable, Equatable {
                 let value: String
+                let label: String?
+
+                init(from decoder: Decoder) throws {
+                    // A string (`"low"`) or an object (`{"value":"max","label":"Max"}`). One container:
+                    // asking for both a keyed and a single-value container on the same decoder traps.
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(String.self), !value.isEmpty {
+                        self.value = value
+                        label = nil
+                        return
+                    }
+                    let object = try container.decode(Object.self)
+                    let value = object.value ?? object.id
+                    guard let value, !value.isEmpty else {
+                        throw DecodingError.dataCorrupted(
+                            .init(codingPath: decoder.codingPath, debugDescription: "reasoning effort has no value"))
+                    }
+                    self.value = value
+                    label = object.label?.isEmpty == false ? object.label : nil
+                }
+
+                private struct Object: Decodable {
+                    let id: String?
+                    let value: String?
+                    let label: String?
+                }
             }
 
             let reasoningEffort: String?
-            let reasoningEfforts: [Effort]?
+            /// True when grok sent `reasoningEfforts`, even as an empty array (older agents).
+            let effortsKeyPresent: Bool
+            let reasoningEfforts: [Effort]
+            let supportsReasoningEffort: Bool?
+            /// Section title from `_meta.group`, `_meta.vendor`, or `_meta.provider` when grok sends one.
+            let group: String?
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                reasoningEffort = (try? container.decodeIfPresent(String.self, forKey: .reasoningEffort)) ?? nil
+                supportsReasoningEffort = (try? container.decodeIfPresent(Bool.self, forKey: .supportsReasoningEffort)) ?? nil
+                effortsKeyPresent = container.contains(.reasoningEfforts)
+                reasoningEfforts = Self.efforts(in: container)
+                group = Self.group(in: container)
+            }
+
+            private static func efforts(in container: KeyedDecodingContainer<CodingKeys>) -> [Effort] {
+                guard var rows = try? container.nestedUnkeyedContainer(forKey: .reasoningEfforts) else { return [] }
+                var efforts: [Effort] = []
+                while !rows.isAtEnd {
+                    guard let row = try? rows.decode(LossyDecodable<Effort>.self) else { break }
+                    if let effort = row.value, !efforts.contains(where: { $0.value == effort.value }) {
+                        efforts.append(effort)
+                    }
+                }
+                return efforts
+            }
+
+            private static func group(in container: KeyedDecodingContainer<CodingKeys>) -> String? {
+                for key in [CodingKeys.group, .vendor, .provider] {
+                    if let name = (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil, !name.isEmpty {
+                        return name
+                    }
+                    if let named = (try? container.decodeIfPresent(NamedGroup.self, forKey: key)) ?? nil,
+                        let name = named.displayName ?? named.name, !name.isEmpty
+                    {
+                        return name
+                    }
+                }
+                return nil
+            }
+
+            private struct NamedGroup: Decodable {
+                let name: String?
+                let displayName: String?
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case reasoningEffort, reasoningEfforts, supportsReasoningEffort, group, vendor, provider
+            }
         }
 
         let modelId: String
@@ -61,6 +167,36 @@ struct InitializeResult: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case meta = "_meta"
+    }
+}
+
+/// A catalog push. grok sends this as `_x.ai/models/update` once the remote list (including third-party
+/// models) has loaded, and again after a login or cache refresh. The body is a model state, or that state
+/// nested under `modelState` / `_meta.modelState`.
+struct ModelsUpdate: Sendable {
+    let state: InitializeResult.ModelState
+
+    static func decode(message: Data) -> ModelsUpdate? {
+        guard let root = try? JSONSerialization.jsonObject(with: message) as? [String: Any],
+            let params = root["params"] as? [String: Any]
+        else { return nil }
+        let payload =
+            params["modelState"] as? [String: Any]
+            ?? (params["_meta"] as? [String: Any])?["modelState"] as? [String: Any]
+            ?? params
+        guard JSONSerialization.isValidJSONObject(payload),
+            let data = try? JSONSerialization.data(withJSONObject: payload),
+            let state = try? JSONDecoder().decode(InitializeResult.ModelState.self, from: data)
+        else { return nil }
+        return ModelsUpdate(state: state)
+    }
+}
+
+/// Decodes one array element and keeps going when that element is malformed.
+private struct LossyDecodable<Value: Decodable>: Decodable {
+    let value: Value?
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }
 
@@ -85,6 +221,17 @@ struct NewSessionParams: Encodable, Sendable {
 public struct NewSessionResult: Decodable, Sendable {
     public let sessionId: String
     public let configOptions: [ConfigOption]?
+    /// The catalog at session-open time, when grok includes one. A bad payload is ignored.
+    let models: InitializeResult.ModelState?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        configOptions = try container.decodeIfPresent([ConfigOption].self, forKey: .configOptions)
+        models = (try? container.decodeIfPresent(InitializeResult.ModelState.self, forKey: .models)) ?? nil
+    }
+
+    private enum CodingKeys: String, CodingKey { case sessionId, configOptions, models }
 }
 
 struct SessionParams: Encodable, Sendable {
@@ -112,27 +259,39 @@ public struct ConfigOption: Decodable, Sendable, Equatable {
     public let id: String
     public let currentValue: String?
     public let values: [String]
+    /// Display names keyed by option value, when grok sent them (`"xhigh"` → `"Extra High"`).
+    public let labels: [String: String]
 
-    public init(id: String, currentValue: String?, values: [String]) {
+    public init(id: String, currentValue: String?, values: [String], labels: [String: String] = [:]) {
         self.id = id
         self.currentValue = currentValue
         self.values = values
+        self.labels = labels
     }
 
     public init(from decoder: Decoder) throws {
         struct Choice: Decodable {
             let value: String?
+            let name: String?
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 value = try? container.decodeIfPresent(String.self, forKey: .value)
+                name = try? container.decodeIfPresent(String.self, forKey: .name)
             }
 
-            enum CodingKeys: String, CodingKey { case value }
+            enum CodingKeys: String, CodingKey { case value, name }
         }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         currentValue = try? container.decodeIfPresent(String.self, forKey: .currentValue)
-        values = ((try? container.decodeIfPresent([Choice].self, forKey: .options)) ?? []).compactMap(\.value)
+        let choices = (try? container.decodeIfPresent([Choice].self, forKey: .options)) ?? []
+        values = choices.compactMap(\.value)
+        labels = Dictionary(
+            choices.compactMap { choice -> (String, String)? in
+                guard let value = choice.value, let name = choice.name, !name.isEmpty else { return nil }
+                return (value, name)
+            },
+            uniquingKeysWith: { _, latest in latest })
     }
 
     enum CodingKeys: String, CodingKey { case id, currentValue, options }

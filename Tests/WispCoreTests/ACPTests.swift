@@ -154,7 +154,7 @@ private final class Outbox: @unchecked Sendable {
                 """#.utf8))
         #expect(
             options == [
-                ConfigOption(id: "model", currentValue: "m", values: ["m"]),
+                ConfigOption(id: "model", currentValue: "m", values: ["m"], labels: ["m": "M"]),
                 ConfigOption(id: "flag", currentValue: nil, values: []),
             ])
     }
